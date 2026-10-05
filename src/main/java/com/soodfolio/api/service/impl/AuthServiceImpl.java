@@ -4,12 +4,14 @@ import com.soodfolio.api.dto.AuthDtos;
 import com.soodfolio.api.entity.Portfolio;
 import com.soodfolio.api.entity.RefreshToken;
 import com.soodfolio.api.entity.User;
+import com.soodfolio.api.exception.DuplicateResourceException;
+import com.soodfolio.api.exception.InvalidCredentialsException;
 import com.soodfolio.api.repository.PortfolioRepository;
-import com.soodfolio.api.repository.RefreshTokenRepository;
 import com.soodfolio.api.repository.UserRepository;
 import com.soodfolio.api.security.JwtTokenProvider;
 import com.soodfolio.api.security.UserPrincipal;
 import com.soodfolio.api.service.AuthService;
+import com.soodfolio.api.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -20,17 +22,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
-
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final PortfolioRepository portfolioRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenService refreshTokenService; // DIP: Injected via Interface
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
@@ -41,11 +39,11 @@ public class AuthServiceImpl implements AuthService {
         String cleanUsername = request.getUsername().toLowerCase().trim();
 
         if (userRepository.existsByEmail(request.getEmail().trim().toLowerCase())) {
-            throw new IllegalArgumentException("Email is already registered!");
+            throw new DuplicateResourceException("Email '" + request.getEmail() + "' is already registered!");
         }
 
         if (portfolioRepository.existsByUsername(cleanUsername)) {
-            throw new IllegalArgumentException("Username '" + cleanUsername + "' is already taken!");
+            throw new DuplicateResourceException("Username '" + cleanUsername + "' is already taken!");
         }
 
         // 1. Create User
@@ -73,7 +71,7 @@ public class AuthServiceImpl implements AuthService {
         // 3. Authenticate & generate tokens
         UserPrincipal userPrincipal = UserPrincipal.create(user);
         String accessToken = tokenProvider.generateAccessToken(userPrincipal);
-        RefreshToken refreshToken = createRefreshToken(user);
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
         return AuthDtos.AuthResponse.builder()
                 .accessToken(accessToken)
@@ -87,44 +85,42 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthDtos.AuthResponse login(AuthDtos.LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsernameOrEmail().trim(), request.getPassword())
-        );
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsernameOrEmail().trim(), request.getPassword())
+            );
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
 
-        User user = userRepository.findById(userPrincipal.getId())
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+            User user = userRepository.findById(userPrincipal.getId())
+                    .orElseThrow(() -> new InvalidCredentialsException("User account not found"));
 
-        String username = portfolioRepository.findByUserId(user.getId())
-                .map(Portfolio::getUsername)
-                .orElse("user");
+            String username = portfolioRepository.findByUserId(user.getId())
+                    .map(Portfolio::getUsername)
+                    .orElse("user");
 
-        String accessToken = tokenProvider.generateAccessToken(userPrincipal);
-        RefreshToken refreshToken = createRefreshToken(user);
+            String accessToken = tokenProvider.generateAccessToken(userPrincipal);
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
-        return AuthDtos.AuthResponse.builder()
+            return AuthDtos.AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken.getToken())
                 .tokenType("Bearer")
                 .expiresInMs(tokenProvider.getExpirationMs())
                 .user(buildUserDto(user, username))
                 .build();
+        } catch (BadCredentialsException ex) {
+            throw new InvalidCredentialsException("Invalid email, username, or password");
+        }
     }
 
     @Override
     @Transactional
     public AuthDtos.AuthResponse refreshToken(AuthDtos.RefreshTokenRequest request) {
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(request.getRefreshToken())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
-
-        if (refreshToken.isRevoked() || refreshToken.getExpiryDate().isBefore(Instant.now())) {
-            refreshTokenRepository.delete(refreshToken);
-            throw new IllegalArgumentException("Refresh token was expired or revoked. Please log in again.");
-        }
-
+        RefreshToken refreshToken = refreshTokenService.verifyExpiration(request.getRefreshToken());
         User user = refreshToken.getUser();
+
         UserPrincipal userPrincipal = UserPrincipal.create(user);
         String newAccessToken = tokenProvider.generateAccessToken(userPrincipal);
 
@@ -144,10 +140,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void logout(String refreshTokenString) {
-        refreshTokenRepository.findByToken(refreshTokenString).ifPresent(token -> {
-            token.setRevoked(true);
-            refreshTokenRepository.save(token);
-        });
+        refreshTokenService.revokeToken(refreshTokenString);
     }
 
     @Override
@@ -155,28 +148,18 @@ public class AuthServiceImpl implements AuthService {
     public AuthDtos.UserDto getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
-            throw new BadCredentialsException("User not authenticated");
+            throw new InvalidCredentialsException("User is not authenticated");
         }
 
         UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
         User user = userRepository.findById(principal.getId())
-                .orElseThrow(() -> new BadCredentialsException("User not found"));
+                .orElseThrow(() -> new InvalidCredentialsException("User not found"));
 
         String username = portfolioRepository.findByUserId(user.getId())
                 .map(Portfolio::getUsername)
                 .orElse("user");
 
         return buildUserDto(user, username);
-    }
-
-    private RefreshToken createRefreshToken(User user) {
-        RefreshToken refreshToken = RefreshToken.builder()
-                .user(user)
-                .token(UUID.randomUUID().toString() + "-" + UUID.randomUUID().toString())
-                .expiryDate(Instant.now().plus(7, ChronoUnit.DAYS))
-                .build();
-
-        return refreshTokenRepository.save(refreshToken);
     }
 
     private AuthDtos.UserDto buildUserDto(User user, String username) {
