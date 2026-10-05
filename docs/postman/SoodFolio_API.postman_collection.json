@@ -1,0 +1,276 @@
+{
+  "info": {
+    "name": "SoodFolio API",
+    "description": "Production-ready REST API collection for SoodFolio Platform (Spring Boot 3 + PostgreSQL). Includes automatic JWT token extraction.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Register New User (201 Created)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.accessToken) {",
+                  "        pm.environment.set('accessToken', json.accessToken);",
+                  "    }",
+                  "    if (json.refreshToken) {",
+                  "        pm.environment.set('refreshToken', json.refreshToken);",
+                  "    }",
+                  "    pm.test('Status code is 201 Created', function () {",
+                  "        pm.response.to.have.status(201);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"devtester315\",\n  \"email\": \"dev308@example.com\",\n  \"password\": \"SecurePassword123!\",\n  \"fullName\": \"Test Developer\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login (200 OK + Auto Save Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.accessToken) {",
+                  "        pm.environment.set('accessToken', json.accessToken);",
+                  "        console.log('Saved accessToken to environment');",
+                  "    }",
+                  "    if (json.refreshToken) {",
+                  "        pm.environment.set('refreshToken', json.refreshToken);",
+                  "        console.log('Saved refreshToken to environment');",
+                  "    }",
+                  "    pm.test('Status code is 200 OK', function () {",
+                  "        pm.response.to.have.status(200);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usernameOrEmail\": \"alex\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token (200 OK)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.accessToken) {",
+                  "        pm.environment.set('accessToken', json.accessToken);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh-token"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout (204 No Content)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Portfolios (Public & SSR)",
+      "item": [
+        {
+          "name": "Get Portfolio by Username (alex)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/portfolios/alex",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portfolios",
+                "alex"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Portfolio Not Found (404 Custom Exception)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/portfolios/nobody_here",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portfolios",
+                "nobody_here"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. REST Error Handling Tests",
+      "item": [
+        {
+          "name": "Register Validation Error (400 Bad Request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login Invalid Password (401 Unauthorized)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usernameOrEmail\": \"alex\",\n  \"password\": \"WrongPassword999!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
