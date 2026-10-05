@@ -1,0 +1,2 @@
+$kind: collection
+description: Production-ready REST API collection for SoodFolio Platform (Spring Boot 3 + PostgreSQL). Includes automatic JWT token extraction.

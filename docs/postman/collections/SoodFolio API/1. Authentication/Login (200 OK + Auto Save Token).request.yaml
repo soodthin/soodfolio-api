@@ -1,0 +1,31 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "usernameOrEmail": "alex",
+      "password": "Password123!"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      if (pm.response.code === 200) {
+          var json = pm.response.json();
+          if (json.accessToken) {
+              pm.environment.set('accessToken', json.accessToken);
+              console.log('Saved accessToken to environment');
+          }
+          if (json.refreshToken) {
+              pm.environment.set('refreshToken', json.refreshToken);
+              console.log('Saved refreshToken to environment');
+          }
+          pm.test('Status code is 200 OK', function () {
+              pm.response.to.have.status(200);
+          });
+      }
+    language: text/javascript
+order: 2000

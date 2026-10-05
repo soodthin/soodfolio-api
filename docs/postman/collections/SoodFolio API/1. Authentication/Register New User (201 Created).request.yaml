@@ -1,0 +1,31 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "username": "devtester315",
+      "email": "dev308@example.com",
+      "password": "SecurePassword123!",
+      "fullName": "Test Developer"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      if (pm.response.code === 201) {
+          var json = pm.response.json();
+          if (json.accessToken) {
+              pm.environment.set('accessToken', json.accessToken);
+          }
+          if (json.refreshToken) {
+              pm.environment.set('refreshToken', json.refreshToken);
+          }
+          pm.test('Status code is 201 Created', function () {
+              pm.response.to.have.status(201);
+          });
+      }
+    language: text/javascript
+order: 1000
