@@ -1,0 +1,45 @@
+$kind: http-request
+url: "{{baseUrl}}/portfolios/me"
+method: PUT
+headers:
+  Authorization: Bearer {{accessToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "title": "THAI DO THINH",
+      "tagline": "SOFTWARE ENGINEER // FULL-STACK DEVELOPER",
+      "bio": "Building high-performance, presentation-first web applications.",
+      "statusText": "AVAILABLE FOR CONTRACTS",
+      "themeMode": "DARK",
+      "showExperience": true,
+      "showProjects": true,
+      "showSkills": true,
+      "showEducation": true,
+      "showContact": true,
+      "socialLinks": [
+        {
+          "platform": "GITHUB",
+          "url": "https://github.com/soodthin",
+          "label": "[ GitHub ]"
+        },
+        {
+          "platform": "LINKEDIN",
+          "url": "https://linkedin.com/in/soodthin",
+          "label": "[ LinkedIn ]"
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Updated title matches", function () {
+          var json = pm.response.json();
+          pm.expect(json.title).to.eql("THAI DO THINH");
+      });
+    language: text/javascript
+order: 2000

@@ -10,4 +10,5 @@ import java.util.UUID;
 @Repository
 public interface AnalyticsViewRepository extends JpaRepository<AnalyticsView, UUID> {
     List<AnalyticsView> findByPortfolioId(UUID portfolioId);
+    long countByPortfolioId(UUID portfolioId);
 }

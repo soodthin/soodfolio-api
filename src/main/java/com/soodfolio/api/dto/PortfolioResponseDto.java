@@ -1,5 +1,6 @@
 package com.soodfolio.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 
@@ -11,12 +12,17 @@ import java.util.UUID;
 public class PortfolioResponseDto {
     private UUID id;
     private String username;
+    private String fullName;
+    private String avatarUrl;
     private String title;
     private String tagline;
     private String bio;
     private String statusText;
     private String resumeUrl;
     private String themeMode;
+    @JsonProperty("isPublished")
+    private boolean isPublished;
+    private long totalViews;
     private boolean showExperience;
     private boolean showProjects;
     private boolean showSkills;
@@ -49,6 +55,7 @@ public class PortfolioResponseDto {
         private String description;
         private List<String> highlights;
         private List<String> skillsUsed;
+        private int orderIndex;
     }
 
     @Data
@@ -65,6 +72,7 @@ public class PortfolioResponseDto {
         private String liveUrl;
         private String githubUrl;
         private String imageUrl;
+        private int orderIndex;
     }
 
     @Data
@@ -73,6 +81,7 @@ public class PortfolioResponseDto {
         private UUID id;
         private String category;
         private String name;
+        private int orderIndex;
     }
 
     @Data
@@ -84,5 +93,6 @@ public class PortfolioResponseDto {
         private String fieldOfStudy;
         private String periodText;
         private String highlights;
+        private int orderIndex;
     }
 }

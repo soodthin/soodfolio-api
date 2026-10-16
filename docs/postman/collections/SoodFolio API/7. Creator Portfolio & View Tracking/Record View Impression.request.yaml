@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{baseUrl}}/portfolios/soodthin/views"
+method: POST
+headers:
+  Content-Type: application/json
+  User-Agent: "PostmanRuntime/7.39.0"
+body:
+  type: text
+  content: |-
+    {
+      "slideId": "01",
+      "referrer": "https://linkedin.com"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test("Response contains totalViews number", function () {
+          var json = pm.response.json();
+          pm.expect(json.totalViews).to.be.a("number");
+      });
+    language: text/javascript
+order: 3000
