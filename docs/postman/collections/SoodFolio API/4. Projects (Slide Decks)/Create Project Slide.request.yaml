@@ -1,0 +1,42 @@
+$kind: http-request
+url: "{{baseUrl}}/portfolios/me/projects"
+method: POST
+headers:
+  Authorization: Bearer {{accessToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "title": "QuantumLedger",
+      "subtitle": "High-Throughput Financial Ledger",
+      "role": "Lead Architect",
+      "periodText": "2026",
+      "description": "Distributed transaction ledger processing 50k TPS with deterministic replay.",
+      "highlights": [
+        "Zero-allocation serialization engine",
+        "Sub-millisecond P99 latency"
+      ],
+      "techStack": [
+        "Java 21",
+        "Spring Boot 3",
+        "PostgreSQL",
+        "Kafka"
+      ],
+      "liveUrl": "https://quantumledger.demo",
+      "githubUrl": "https://github.com/soodthin/quantumledger"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test("Saved projectId to environment", function () {
+          var json = pm.response.json();
+          if (json.id) {
+              pm.environment.set("projectId", json.id);
+          }
+      });
+    language: text/javascript
+order: 2000
