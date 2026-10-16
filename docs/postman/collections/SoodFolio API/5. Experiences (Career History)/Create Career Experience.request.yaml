@@ -1,0 +1,41 @@
+$kind: http-request
+url: "{{baseUrl}}/portfolios/me/experiences"
+method: POST
+headers:
+  Authorization: Bearer {{accessToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "roleTitle": "Staff Software Engineer",
+      "companyName": "Hyperscale Tech",
+      "companyUrl": "https://hyperscale.example.com",
+      "location": "Ho Chi Minh City, Vietnam",
+      "periodText": "2026 — PRESENT",
+      "description": "Architecting multi-tenant cloud portfolio platforms.",
+      "highlights": [
+        "Reduced system p99 latency by 45%",
+        "Spearheaded reactive microservices adoption"
+      ],
+      "skillsUsed": [
+        "Java 21",
+        "Spring Boot 3",
+        "PostgreSQL",
+        "Kafka"
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test("Saved experienceId to environment", function () {
+          var json = pm.response.json();
+          if (json.id) {
+              pm.environment.set("experienceId", json.id);
+          }
+      });
+    language: text/javascript
+order: 2000
