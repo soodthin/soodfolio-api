@@ -1,0 +1,26 @@
+$kind: http-request
+url: "{{baseUrl}}/portfolios/me/educations/reorder"
+method: PUT
+headers:
+  Authorization: Bearer {{accessToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "educationIds": [
+        "{{educationId}}"
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Response is array", function () {
+          var json = pm.response.json();
+          pm.expect(Array.isArray(json)).to.be.true;
+      });
+    language: text/javascript
+order: 4000
