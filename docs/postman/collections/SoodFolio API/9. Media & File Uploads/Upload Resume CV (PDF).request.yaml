@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/uploads/resume"
+method: POST
+headers:
+  Authorization: Bearer {{accessToken}}
+body:
+  type: formdata
+  formdata:
+    - name: file
+      type: file
+      value: ""
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+      pm.test("Response contains uploaded PDF url", function () {
+          var json = pm.response.json();
+          pm.expect(json.url).to.exist;
+          pm.expect(json.url).to.include("/uploads/resumes/");
+          pm.expect(json.contentType).to.equal("application/pdf");
+          if (json.url) {
+              pm.environment.set("uploadedResumeUrl", json.url);
+          }
+      });
+    language: text/javascript
+order: 2000

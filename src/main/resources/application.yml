@@ -20,12 +20,25 @@ spring:
         format_sql: true
         jdbc:
           time_zone: UTC
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 20MB
 
-# JWT Configuration
+# JWT & OAuth2 Configuration
 app:
+  upload:
+    dir: uploads
   jwt:
     secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
     expiration-ms: 86400000 # 24 hours
+  oauth2:
+    github:
+      client-id: Ov23li3aBSxR9V3u8J2O
+      client-secret: 4bc722804f379b7d7e5ca7cf18788a8ef1a59ff2
+    google:
+      client-id: 622903719114-lilk7gbj5jcc138eva810gvr7uva3fqe.apps.googleusercontent.com
+      client-secret: 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
 
 # Swagger / OpenAPI
 springdoc:
