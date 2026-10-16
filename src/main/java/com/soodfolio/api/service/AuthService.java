@@ -8,4 +8,14 @@ public interface AuthService {
     AuthDtos.AuthResponse refreshToken(AuthDtos.RefreshTokenRequest request);
     void logout(String refreshToken);
     AuthDtos.UserDto getCurrentUser();
+
+    // Forgot & Reset Password
+    AuthDtos.MessageResponse forgotPassword(AuthDtos.ForgotPasswordRequest request);
+    AuthDtos.VerifyResetTokenResponse verifyResetToken(String token);
+    AuthDtos.MessageResponse resetPassword(AuthDtos.ResetPasswordRequest request);
+
+    // OAuth 2.0 Social Login & Sandbox
+    AuthDtos.AuthResponse processOAuthLogin(AuthDtos.OAuthLoginRequest request);
+    AuthDtos.AuthResponse processOAuthSandbox(AuthDtos.OAuthSandboxRequest request);
+    AuthDtos.AuthResponse exchangeOAuthCode(AuthDtos.OAuthExchangeRequest request);
 }

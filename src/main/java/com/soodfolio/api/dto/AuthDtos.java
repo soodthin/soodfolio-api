@@ -54,6 +54,72 @@ public class AuthDtos {
     }
 
     @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ForgotPasswordRequest {
+        @NotBlank(message = "Email is required")
+        @Email(message = "Invalid email format")
+        private String email;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ResetPasswordRequest {
+        @NotBlank(message = "Reset token is required")
+        private String token;
+
+        @NotBlank(message = "New password is required")
+        @Size(min = 6, message = "Password must be at least 6 characters")
+        private String newPassword;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OAuthLoginRequest {
+        @NotBlank(message = "Provider is required (GITHUB or GOOGLE)")
+        private String provider;
+
+        private String code;
+        private String idToken;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OAuthSandboxRequest {
+        @NotBlank(message = "Provider is required (GITHUB or GOOGLE)")
+        private String provider;
+
+        private String email;
+        private String fullName;
+        private String username;
+        private String avatarUrl;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OAuthExchangeRequest {
+        @NotBlank(message = "Provider is required (GITHUB or GOOGLE)")
+        private String provider;
+
+        @NotBlank(message = "Authorization code is required")
+        private String code;
+
+        private String redirectUri;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    public static class VerifyResetTokenResponse {
+        private boolean valid;
+        private String email;
+    }
+
+    @Data
     @Builder
     @AllArgsConstructor
     public static class AuthResponse {
@@ -74,10 +140,12 @@ public class AuthDtos {
         private String username;
         private String avatarUrl;
         private String role;
+        private String authProvider;
     }
 
     @Data
     @AllArgsConstructor
+    @NoArgsConstructor
     public static class MessageResponse {
         private String message;
     }
