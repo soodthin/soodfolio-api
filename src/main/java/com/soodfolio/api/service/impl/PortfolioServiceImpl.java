@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -105,6 +106,20 @@ public class PortfolioServiceImpl implements PortfolioService {
         long totalViews = analyticsViewRepository.countByPortfolioId(portfolio.getId());
         return ViewCountResponseDto.builder()
                 .totalViews(totalViews)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PortfolioResponseDto.PortfolioExportDto exportPortfolio(UUID userId) {
+        PortfolioResponseDto dto = getPortfolioByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Portfolio", "userId", userId));
+
+        return PortfolioResponseDto.PortfolioExportDto.builder()
+                .exportVersion("1.0")
+                .exportedAt(LocalDateTime.now())
+                .generator("SoodFolio Platform")
+                .portfolio(dto)
                 .build();
     }
 

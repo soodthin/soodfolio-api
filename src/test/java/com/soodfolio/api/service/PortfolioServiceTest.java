@@ -169,4 +169,30 @@ class PortfolioServiceTest {
 
         verify(analyticsViewRepository, never()).save(any());
     }
+
+    @Test
+    @DisplayName("Should export portfolio snapshot with schema version and timestamp")
+    void shouldExportPortfolioSuccessfully() {
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+        when(analyticsViewRepository.countByPortfolioId(portfolio.getId())).thenReturn(42L);
+
+        PortfolioResponseDto.PortfolioExportDto exportDto = portfolioService.exportPortfolio(userId);
+
+        assertThat(exportDto).isNotNull();
+        assertThat(exportDto.getExportVersion()).isEqualTo("1.0");
+        assertThat(exportDto.getGenerator()).isEqualTo("SoodFolio Platform");
+        assertThat(exportDto.getExportedAt()).isNotNull();
+        assertThat(exportDto.getPortfolio()).isNotNull();
+        assertThat(exportDto.getPortfolio().getUsername()).isEqualTo("alex");
+    }
+
+    @Test
+    @DisplayName("Should throw ResourceNotFoundException when exporting non-existent portfolio")
+    void shouldThrowNotFoundWhenExportingNonExistentPortfolio() {
+        UUID unknownId = UUID.randomUUID();
+        when(portfolioRepository.findByUserId(unknownId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> portfolioService.exportPortfolio(unknownId))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
 }

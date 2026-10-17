@@ -13,7 +13,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -64,6 +66,21 @@ public class PortfolioController {
         boolean isPublished = body.getOrDefault("isPublished", true);
         PortfolioResponseDto dto = portfolioService.updatePublishedStatus(userPrincipal.getId(), isPublished);
         return ResponseEntity.ok(dto);
+    }
+
+    @GetMapping("/me/export")
+    @Operation(summary = "Export portfolio data as lightweight JSON file", security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<PortfolioResponseDto.PortfolioExportDto> exportMyPortfolio(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        if (userPrincipal == null) {
+            throw new InvalidCredentialsException("Yêu cầu đăng nhập để thực hiện thao tác này.");
+        }
+        PortfolioResponseDto.PortfolioExportDto exportData = portfolioService.exportPortfolio(userPrincipal.getId());
+        String filename = "soodfolio-" + (exportData.getPortfolio() != null ? exportData.getPortfolio().getUsername() : "backup") + "-export.json";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(exportData);
     }
 
     @GetMapping("/{username}")

@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/portfolios/me/export"
+method: GET
+headers:
+  Authorization: Bearer {{accessToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200 OK", function () {
+          pm.response.to.have.status(200);
+      });
+      pm.test("Content-Disposition attachment header is present", function () {
+          pm.expect(pm.response.headers.get("Content-Disposition")).to.include("attachment; filename=\"soodfolio-");
+      });
+      pm.test("Export metadata and portfolio payload are present", function () {
+          var json = pm.response.json();
+          pm.expect(json.exportVersion).to.eql("1.0");
+          pm.expect(json.generator).to.eql("SoodFolio Platform");
+          pm.expect(json.exportedAt).to.be.a("string");
+          pm.expect(json.portfolio).to.be.an("object");
+          pm.expect(json.portfolio.username).to.be.a("string");
+      });
+    language: text/javascript
+order: 4000

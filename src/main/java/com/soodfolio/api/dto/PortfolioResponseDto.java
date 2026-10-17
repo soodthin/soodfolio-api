@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -94,5 +95,14 @@ public class PortfolioResponseDto {
         private String periodText;
         private String highlights;
         private int orderIndex;
+    }
+
+    @Data
+    @Builder
+    public static class PortfolioExportDto {
+        private String exportVersion;
+        private LocalDateTime exportedAt;
+        private String generator;
+        private PortfolioResponseDto portfolio;
     }
 }
