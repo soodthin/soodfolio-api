@@ -3,6 +3,7 @@ package com.soodfolio.api.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
@@ -79,30 +80,52 @@ public class Portfolio {
     @Column(name = "is_published", nullable = false)
     private boolean isPublished = true;
 
+    @BatchSize(size = 25)
     @Builder.Default
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<SocialLink> socialLinks = new ArrayList<>();
 
+    @BatchSize(size = 25)
     @Builder.Default
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<Experience> experiences = new ArrayList<>();
 
+    @BatchSize(size = 25)
     @Builder.Default
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<Project> projects = new ArrayList<>();
 
+    @BatchSize(size = 25)
     @Builder.Default
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<Skill> skills = new ArrayList<>();
 
+    @BatchSize(size = 25)
     @Builder.Default
     @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<Education> educations = new ArrayList<>();
+
+    @Version
+    @Builder.Default
+    @Column(name = "version", nullable = false)
+    private Integer version = 0;
+
+    @BatchSize(size = 25)
+    @Builder.Default
+    @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("version DESC")
+    private List<PortfolioSnapshot> snapshots = new ArrayList<>();
+
+    @BatchSize(size = 25)
+    @Builder.Default
+    @OneToMany(mappedBy = "portfolio", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("createdAt DESC")
+    private List<ShareLink> shareLinks = new ArrayList<>();
 
     @Builder.Default
     @Column(name = "is_deleted", nullable = false)

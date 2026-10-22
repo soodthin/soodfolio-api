@@ -109,6 +109,7 @@ public class AuthDtos {
         private String code;
 
         private String redirectUri;
+        private String state;
     }
 
     @Data

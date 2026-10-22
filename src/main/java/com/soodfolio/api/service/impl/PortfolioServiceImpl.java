@@ -42,7 +42,7 @@ public class PortfolioServiceImpl implements PortfolioService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public PortfolioResponseDto updatePublishedStatus(UUID userId, boolean isPublished) {
         Portfolio portfolio = portfolioRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio", "userId", userId));
@@ -52,7 +52,7 @@ public class PortfolioServiceImpl implements PortfolioService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public PortfolioResponseDto updatePortfolio(UUID userId, UpdatePortfolioRequestDto request) {
         Portfolio portfolio = portfolioRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio", "userId", userId));
@@ -88,7 +88,7 @@ public class PortfolioServiceImpl implements PortfolioService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ViewCountResponseDto recordView(String username, RecordViewRequestDto request, String userAgent) {
         Portfolio portfolio = portfolioRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio", "username", username));

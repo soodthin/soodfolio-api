@@ -73,12 +73,15 @@ public class WebSecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                 .requestMatchers(
                     "/i18n/**",
-                    "/portfolios/**",
                     "/auth/**",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
-                    "/swagger-ui.html"
+                    "/swagger-ui.html",
+                    "/public/links/**"
                 ).permitAll()
+                .requestMatchers("/portfolios/me", "/portfolios/me/**").authenticated()
+                .requestMatchers(HttpMethod.GET, "/portfolios/{username}").permitAll()
+                .requestMatchers(HttpMethod.POST, "/portfolios/{username}/views").permitAll()
                 .anyRequest().authenticated()
             );
 

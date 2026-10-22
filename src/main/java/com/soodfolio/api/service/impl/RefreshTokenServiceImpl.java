@@ -37,7 +37,13 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(tokenString)
                 .orElseThrow(() -> new InvalidTokenException("Refresh token was not found in the system"));
 
-        if (refreshToken.isRevoked() || refreshToken.getExpiryDate().isBefore(Instant.now())) {
+        if (refreshToken.isRevoked()) {
+            // SEC-03: Token Reuse Detection - An already revoked token is used, indicating a replay attack
+            refreshTokenRepository.deleteByUser(refreshToken.getUser());
+            throw new InvalidTokenException("Refresh token was expired or revoked. Please sign in again.");
+        }
+
+        if (refreshToken.getExpiryDate().isBefore(Instant.now())) {
             refreshTokenRepository.delete(refreshToken);
             throw new InvalidTokenException("Refresh token was expired or revoked. Please sign in again.");
         }

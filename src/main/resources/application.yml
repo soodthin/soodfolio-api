@@ -18,6 +18,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        default_batch_fetch_size: 25
         jdbc:
           time_zone: UTC
   servlet:
@@ -30,15 +31,15 @@ app:
   upload:
     dir: uploads
   jwt:
-    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
-    expiration-ms: 86400000 # 24 hours
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000} # 24 hours
   oauth2:
     github:
-      client-id: Ov23li3aBSxR9V3u8J2O
-      client-secret: 4bc722804f379b7d7e5ca7cf18788a8ef1a59ff2
+      client-id: ${GITHUB_CLIENT_ID:Ov23li3aBSxR9V3u8J2O}
+      client-secret: ${GITHUB_CLIENT_SECRET:4bc722804f379b7d7e5ca7cf18788a8ef1a59ff2}
     google:
-      client-id: 622903719114-lilk7gbj5jcc138eva810gvr7uva3fqe.apps.googleusercontent.com
-      client-secret: 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
+      client-id: ${GOOGLE_CLIENT_ID:622903719114-lilk7gbj5jcc138eva810gvr7uva3fqe.apps.googleusercontent.com}
+      client-secret: ${GOOGLE_CLIENT_SECRET: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}
 
 # Swagger / OpenAPI
 springdoc:

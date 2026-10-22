@@ -69,6 +69,13 @@ public class AuthServiceImpl implements AuthService {
 
     private final RestClient restClient = RestClient.create();
 
+    private static final List<String> ALLOWED_REDIRECT_PREFIXES = List.of(
+            "http://localhost:3000/auth/callback/",
+            "http://localhost:3001/auth/callback/",
+            "https://soodfolio.io/auth/callback/",
+            "https://soodfolio.vercel.app/auth/callback/"
+    );
+
     // Concurrency guards to prevent duplicate external token exchange with GitHub / Google
     private final Map<String, CompletableFuture<AuthDtos.AuthResponse>> activeOAuthExchanges = new ConcurrentHashMap<>();
     private final Map<String, AuthDtos.AuthResponse> recentOAuthExchanges = new ConcurrentHashMap<>();
@@ -157,10 +164,14 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public AuthDtos.AuthResponse refreshToken(AuthDtos.RefreshTokenRequest request) {
-        RefreshToken refreshToken = refreshTokenService.verifyExpiration(request.getRefreshToken());
-        User user = refreshToken.getUser();
+        RefreshToken oldRefreshToken = refreshTokenService.verifyExpiration(request.getRefreshToken());
+        User user = oldRefreshToken.getUser();
+
+        // SEC-03 Remediation: Single-use Refresh Token Rotation
+        refreshTokenService.revokeToken(oldRefreshToken.getToken());
+        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
 
         UserPrincipal userPrincipal = UserPrincipal.create(user);
         String newAccessToken = tokenProvider.generateAccessToken(userPrincipal);
@@ -171,7 +182,7 @@ public class AuthServiceImpl implements AuthService {
 
         return AuthDtos.AuthResponse.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(refreshToken.getToken())
+                .refreshToken(newRefreshToken.getToken())
                 .tokenType("Bearer")
                 .expiresInMs(tokenProvider.getExpirationMs())
                 .user(buildUserDto(user, username))
@@ -295,6 +306,12 @@ public class AuthServiceImpl implements AuthService {
                 ? request.getUsername().trim().toLowerCase().replaceAll("[^a-z0-9_-]", "")
                 : (provider.equalsIgnoreCase("GITHUB") ? "github_dev" : "google_dev");
 
+        // SEC-01 Remediation: Prevent Account Takeover of real accounts via Sandbox Mode
+        User existingUser = userRepository.findByEmail(email).orElse(null);
+        if (existingUser != null && (existingUser.getProviderId() == null || !existingUser.getProviderId().startsWith("sandbox-"))) {
+            throw new InvalidCredentialsException("Tài khoản '" + email + "' đã được đăng ký chính thức trên hệ thống. Không thể đăng nhập bằng Sandbox Mode.");
+        }
+
         return findOrCreateOAuthUser(email, fullName, baseUsername, null, provider, "sandbox-" + System.currentTimeMillis());
     }
 
@@ -355,6 +372,15 @@ public class AuthServiceImpl implements AuthService {
     private AuthDtos.AuthResponse doExchangeOAuthCode(AuthDtos.OAuthExchangeRequest request) {
         String provider = request.getProvider().toUpperCase().trim();
         log.info("[SOODFOLIO] Exchanging OAuth authorization code for provider: {}", provider);
+
+        // SEC-05: Validate redirect_uri against whitelist
+        if (request.getRedirectUri() != null && !request.getRedirectUri().isBlank()) {
+            boolean isAllowed = ALLOWED_REDIRECT_PREFIXES.stream()
+                    .anyMatch(prefix -> request.getRedirectUri().startsWith(prefix));
+            if (!isAllowed) {
+                throw new InvalidCredentialsException("redirect_uri không nằm trong danh sách được phép");
+            }
+        }
 
         String email = null;
         String fullName = null;

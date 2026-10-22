@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS portfolios (
     show_education BOOLEAN NOT NULL DEFAULT TRUE,
     show_contact BOOLEAN NOT NULL DEFAULT TRUE,
     is_published BOOLEAN NOT NULL DEFAULT TRUE,
+    version INT NOT NULL DEFAULT 0,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -173,4 +174,56 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
+
+
+-- 11. Bảng PORTFOLIO_SNAPSHOTS (Lưu snapshot nội dung portfolio bất biến)
+CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    portfolio_id UUID NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+    version INT NOT NULL DEFAULT 1,
+    snapshot_data JSONB NOT NULL,
+    changelog VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_portfolio_version UNIQUE (portfolio_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_portfolio_id ON portfolio_snapshots(portfolio_id);
+
+
+-- 12. Bảng SHARE_LINKS (Quản lý link ứng tuyển riêng theo công ty)
+CREATE TABLE IF NOT EXISTS share_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    portfolio_id UUID NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+    snapshot_id UUID NOT NULL REFERENCES portfolio_snapshots(id) ON DELETE RESTRICT,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    company_name VARCHAR(150) NOT NULL,
+    slug_alias VARCHAR(100),
+    custom_layout VARCHAR(50) DEFAULT 'CINEMATIC_DECK',
+    allowed_slide_ids JSONB,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    max_views INT,
+    view_count INT NOT NULL DEFAULT 0,
+    is_revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_links_token_hash ON share_links(token_hash);
+CREATE INDEX IF NOT EXISTS idx_share_links_portfolio_id ON share_links(portfolio_id);
+
+
+-- 13. Bảng SHARE_LINK_TELEMETRY (Lưu sự kiện đo thời gian xem slide theo link)
+CREATE TABLE IF NOT EXISTS share_link_telemetry (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    share_link_id UUID NOT NULL REFERENCES share_links(id) ON DELETE CASCADE,
+    session_id VARCHAR(64) NOT NULL,
+    slide_key VARCHAR(100) NOT NULL,
+    dwell_seconds INT NOT NULL DEFAULT 0,
+    device_type VARCHAR(20),
+    user_agent TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_telemetry_share_link ON share_link_telemetry(share_link_id);
+
 
