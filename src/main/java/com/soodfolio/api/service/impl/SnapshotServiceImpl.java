@@ -134,8 +134,8 @@ public class SnapshotServiceImpl implements SnapshotService {
         portfolio.setShowContact(data.isShowContact());
         portfolio.setPublished(data.isPublished());
 
+        portfolio.getSocialLinks().clear();
         if (data.getSocialLinks() != null) {
-            portfolio.getSocialLinks().clear();
             for (int i = 0; i < data.getSocialLinks().size(); i++) {
                 PortfolioResponseDto.SocialLinkDto s = data.getSocialLinks().get(i);
                 portfolio.getSocialLinks().add(SocialLink.builder()
@@ -148,8 +148,8 @@ public class SnapshotServiceImpl implements SnapshotService {
             }
         }
 
+        portfolio.getExperiences().clear();
         if (data.getExperiences() != null) {
-            portfolio.getExperiences().clear();
             for (int i = 0; i < data.getExperiences().size(); i++) {
                 PortfolioResponseDto.ExperienceDto e = data.getExperiences().get(i);
                 portfolio.getExperiences().add(Experience.builder()
@@ -167,8 +167,8 @@ public class SnapshotServiceImpl implements SnapshotService {
             }
         }
 
+        portfolio.getProjects().clear();
         if (data.getProjects() != null) {
-            portfolio.getProjects().clear();
             for (int i = 0; i < data.getProjects().size(); i++) {
                 PortfolioResponseDto.ProjectDto p = data.getProjects().get(i);
                 portfolio.getProjects().add(Project.builder()
@@ -188,8 +188,8 @@ public class SnapshotServiceImpl implements SnapshotService {
             }
         }
 
+        portfolio.getSkills().clear();
         if (data.getSkills() != null) {
-            portfolio.getSkills().clear();
             for (int i = 0; i < data.getSkills().size(); i++) {
                 PortfolioResponseDto.SkillDto sk = data.getSkills().get(i);
                 portfolio.getSkills().add(Skill.builder()
@@ -201,8 +201,8 @@ public class SnapshotServiceImpl implements SnapshotService {
             }
         }
 
+        portfolio.getEducations().clear();
         if (data.getEducations() != null) {
-            portfolio.getEducations().clear();
             for (int i = 0; i < data.getEducations().size(); i++) {
                 PortfolioResponseDto.EducationDto ed = data.getEducations().get(i);
                 portfolio.getEducations().add(Education.builder()

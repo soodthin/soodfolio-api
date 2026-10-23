@@ -2,11 +2,13 @@ package com.soodfolio.api.exception;
 
 import com.soodfolio.api.dto.ErrorResponseDto;
 import com.soodfolio.api.service.I18nService;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -82,7 +84,15 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, i18nService.getMessage("upload.server_size_exceeded"), request);
     }
 
-    // 6. 500 Internal Server Error - Catch-all for unhandled unexpected exceptions
+    // 6. 409 Conflict - Optimistic Locking Concurrency Failures
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
+    public ResponseEntity<ErrorResponseDto> handleOptimisticLockingFailure(
+            Exception ex, HttpServletRequest request) {
+        log.warn("Optimistic locking conflict: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.CONFLICT, i18nService.getMessage("common.concurrency_conflict"), request);
+    }
+
+    // 7. 500 Internal Server Error - Catch-all for unhandled unexpected exceptions
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDto> handleGlobalException(
             Exception ex, HttpServletRequest request) {

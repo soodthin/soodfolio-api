@@ -207,4 +207,22 @@ class PortfolioControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.totalViews").value(42));
     }
+
+    @Test
+    @DisplayName("PUT /portfolios/me - 409 Conflict when concurrent modification causes OptimisticLockingFailure")
+    void shouldReturn409ConflictOnOptimisticLockingFailure() throws Exception {
+        UpdatePortfolioRequestDto requestDto = UpdatePortfolioRequestDto.builder()
+                .title("Concurrent Update")
+                .build();
+
+        when(portfolioService.updatePortfolio(eq(userId), any(UpdatePortfolioRequestDto.class)))
+                .thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException("Portfolio", userId));
+
+        mockMvc.perform(put("/portfolios/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(requestDto)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("common.concurrency_conflict"));
+    }
 }
