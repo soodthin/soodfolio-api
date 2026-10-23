@@ -11,6 +11,9 @@ spring:
     username: postgres
     password: Admin123
     driver-class-name: org.postgresql.Driver
+  sql:
+    init:
+      mode: ${SQL_INIT_MODE:always}
   jpa:
     hibernate:
       ddl-auto: validate

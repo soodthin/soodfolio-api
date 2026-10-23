@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS portfolios (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS version INT NOT NULL DEFAULT 0;
+
 -- 3. Bảng SOCIAL_LINKS (Liên kết mạng xã hội của portfolio)
 CREATE TABLE IF NOT EXISTS social_links (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -183,7 +185,7 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
     version INT NOT NULL DEFAULT 1,
     snapshot_data JSONB NOT NULL,
     changelog VARCHAR(255),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_portfolio_version UNIQUE (portfolio_id, version)
 );
 
@@ -200,12 +202,12 @@ CREATE TABLE IF NOT EXISTS share_links (
     slug_alias VARCHAR(100),
     custom_layout VARCHAR(50) DEFAULT 'CINEMATIC_DECK',
     allowed_slide_ids JSONB,
-    expires_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP,
     max_views INT,
     view_count INT NOT NULL DEFAULT 0,
     is_revoked BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_share_links_token_hash ON share_links(token_hash);
@@ -221,7 +223,7 @@ CREATE TABLE IF NOT EXISTS share_link_telemetry (
     dwell_seconds INT NOT NULL DEFAULT 0,
     device_type VARCHAR(20),
     user_agent TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_telemetry_share_link ON share_link_telemetry(share_link_id);

@@ -517,4 +517,46 @@ class SnapshotServiceTest {
 
         verify(portfolioRepository, never()).save(any());
     }
+
+    @Test
+    @DisplayName("Should clear all existing collections when snapshot data has null collections")
+    void shouldClearCollectionsWhenSnapshotDataHasNullCollections() throws JsonProcessingException {
+        portfolio.getSocialLinks().add(SocialLink.builder().platform("GITHUB").url("https://github.com/alex").build());
+        portfolio.getExperiences().add(Experience.builder().roleTitle("Dev").companyName("Corp").periodText("2020").build());
+        portfolio.getProjects().add(Project.builder().title("Proj").build());
+        portfolio.getSkills().add(Skill.builder().category("BACKEND").name("Java").build());
+        portfolio.getEducations().add(Education.builder().institution("Uni").degree("BS").periodText("2020").build());
+
+        PortfolioResponseDto emptyDto = PortfolioResponseDto.builder()
+                .id(portfolioId)
+                .title("Empty Collections")
+                .socialLinks(null)
+                .experiences(null)
+                .projects(null)
+                .skills(null)
+                .educations(null)
+                .build();
+
+        String snapshotJson = "{\"title\":\"Empty Collections\"}";
+        PortfolioSnapshot snapshot = PortfolioSnapshot.builder()
+                .portfolio(portfolio)
+                .version(2)
+                .snapshotData(snapshotJson)
+                .build();
+
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+        when(snapshotRepository.findByPortfolioIdAndVersion(portfolioId, 2)).thenReturn(Optional.of(snapshot));
+        when(objectMapper.readValue(snapshotJson, PortfolioResponseDto.class)).thenReturn(emptyDto);
+        when(portfolioRepository.save(any(Portfolio.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(portfolioService.getPortfolioByUserId(userId)).thenReturn(Optional.of(emptyDto));
+
+        snapshotService.rollbackToSnapshot(userId, 2);
+
+        assertThat(portfolio.getSocialLinks()).isEmpty();
+        assertThat(portfolio.getExperiences()).isEmpty();
+        assertThat(portfolio.getProjects()).isEmpty();
+        assertThat(portfolio.getSkills()).isEmpty();
+        assertThat(portfolio.getEducations()).isEmpty();
+    }
 }
+
