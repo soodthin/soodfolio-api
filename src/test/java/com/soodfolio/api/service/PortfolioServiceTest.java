@@ -171,28 +171,78 @@ class PortfolioServiceTest {
     }
 
     @Test
-    @DisplayName("Should export portfolio snapshot with schema version and timestamp")
-    void shouldExportPortfolioSuccessfully() {
+    @DisplayName("Should update themeConfig and return it in PortfolioResponseDto")
+    void shouldUpdateThemeConfigSuccessfully() {
+        String newThemeConfig = "{\"preset\":\"spotlight-focus\"}";
+        UpdatePortfolioRequestDto request = UpdatePortfolioRequestDto.builder()
+                .title("Alex Nguyen")
+                .themeConfig(newThemeConfig)
+                .build();
+
         when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
-        when(analyticsViewRepository.countByPortfolioId(portfolio.getId())).thenReturn(42L);
+        when(portfolioRepository.save(any(Portfolio.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PortfolioResponseDto.PortfolioExportDto exportDto = portfolioService.exportPortfolio(userId);
+        PortfolioResponseDto response = portfolioService.updatePortfolio(userId, request);
 
-        assertThat(exportDto).isNotNull();
-        assertThat(exportDto.getExportVersion()).isEqualTo("1.0");
-        assertThat(exportDto.getGenerator()).isEqualTo("SoodFolio Platform");
-        assertThat(exportDto.getExportedAt()).isNotNull();
-        assertThat(exportDto.getPortfolio()).isNotNull();
-        assertThat(exportDto.getPortfolio().getUsername()).isEqualTo("alex");
+        assertThat(response).isNotNull();
+        assertThat(response.getThemeConfig()).isEqualTo(newThemeConfig);
+        assertThat(portfolio.getThemeConfig()).isEqualTo(newThemeConfig);
+        verify(portfolioRepository).save(portfolio);
     }
 
     @Test
-    @DisplayName("Should throw ResourceNotFoundException when exporting non-existent portfolio")
-    void shouldThrowNotFoundWhenExportingNonExistentPortfolio() {
-        UUID unknownId = UUID.randomUUID();
-        when(portfolioRepository.findByUserId(unknownId)).thenReturn(Optional.empty());
+    @DisplayName("Should preserve existing themeConfig when request themeConfig is null")
+    void shouldPreserveExistingThemeConfigWhenRequestThemeConfigIsNull() {
+        String existingThemeConfig = "{\"preset\":\"terminal-matrix\"}";
+        portfolio.setThemeConfig(existingThemeConfig);
 
-        assertThatThrownBy(() -> portfolioService.exportPortfolio(unknownId))
-                .isInstanceOf(ResourceNotFoundException.class);
+        UpdatePortfolioRequestDto request = UpdatePortfolioRequestDto.builder()
+                .title("Alex Nguyen Updated")
+                .themeConfig(null)
+                .build();
+
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+        when(portfolioRepository.save(any(Portfolio.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PortfolioResponseDto response = portfolioService.updatePortfolio(userId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getThemeConfig()).isEqualTo(existingThemeConfig);
+        assertThat(portfolio.getThemeConfig()).isEqualTo(existingThemeConfig);
+        verify(portfolioRepository).save(portfolio);
+    }
+
+    @Test
+    @DisplayName("Should handle default and null themeConfig cleanly during read and update")
+    void shouldHandleDefaultAndNullThemeConfigCleanly() {
+        // 1. Reading portfolio with unset (null) themeConfig
+        portfolio.setThemeConfig(null);
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+
+        Optional<PortfolioResponseDto> defaultResult = portfolioService.getPortfolioByUserId(userId);
+        assertThat(defaultResult).isPresent();
+        assertThat(defaultResult.get().getThemeConfig()).isNull();
+
+        // 2. Updating with null themeConfig when existing themeConfig is already null
+        UpdatePortfolioRequestDto updateRequest = UpdatePortfolioRequestDto.builder()
+                .title("Alex Nguyen")
+                .themeConfig(null)
+                .build();
+        when(portfolioRepository.save(any(Portfolio.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PortfolioResponseDto updatedResponse = portfolioService.updatePortfolio(userId, updateRequest);
+        assertThat(updatedResponse).isNotNull();
+        assertThat(updatedResponse.getThemeConfig()).isNull();
+        assertThat(portfolio.getThemeConfig()).isNull();
+
+        // 3. Reading portfolio with populated themeConfig
+        String customTheme = "{\"preset\":\"editorial-clean\",\"accentColor\":\"#F59E0B\"}";
+        portfolio.setThemeConfig(customTheme);
+        when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
+
+        Optional<PortfolioResponseDto> customResult = portfolioService.getPortfolioByUsername("alex");
+        assertThat(customResult).isPresent();
+        assertThat(customResult.get().getThemeConfig()).isEqualTo(customTheme);
     }
 }
+

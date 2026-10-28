@@ -14,5 +14,5 @@ public interface PortfolioService {
     PortfolioResponseDto updatePublishedStatus(UUID userId, boolean isPublished);
     PortfolioResponseDto updatePortfolio(UUID userId, UpdatePortfolioRequestDto request);
     ViewCountResponseDto recordView(String username, RecordViewRequestDto request, String userAgent);
-    PortfolioResponseDto.PortfolioExportDto exportPortfolio(UUID userId);
 }
+

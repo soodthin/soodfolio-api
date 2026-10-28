@@ -20,6 +20,7 @@ public class UpdatePortfolioRequestDto {
     private String statusText;
     private String resumeUrl;
     private String themeMode;
+    private String themeConfig;
 
     @Builder.Default
     private boolean showExperience = true;

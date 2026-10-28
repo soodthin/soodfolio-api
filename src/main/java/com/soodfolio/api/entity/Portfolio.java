@@ -56,6 +56,9 @@ public class Portfolio {
     @Column(name = "theme_mode", length = 20)
     private String themeMode = "DARK";
 
+    @Column(name = "theme_config", columnDefinition = "TEXT")
+    private String themeConfig;
+
     @Builder.Default
     @Column(name = "show_experience", nullable = false)
     private boolean showExperience = true;

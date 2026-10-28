@@ -15,10 +15,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 
 @Service
 @RequiredArgsConstructor
@@ -63,6 +63,9 @@ public class PortfolioServiceImpl implements PortfolioService {
         portfolio.setStatusText(request.getStatusText());
         portfolio.setResumeUrl(request.getResumeUrl());
         portfolio.setThemeMode(request.getThemeMode());
+        if (request.getThemeConfig() != null) {
+            portfolio.setThemeConfig(request.getThemeConfig());
+        }
         portfolio.setShowExperience(request.isShowExperience());
         portfolio.setShowProjects(request.isShowProjects());
         portfolio.setShowSkills(request.isShowSkills());
@@ -109,21 +112,8 @@ public class PortfolioServiceImpl implements PortfolioService {
                 .build();
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public PortfolioResponseDto.PortfolioExportDto exportPortfolio(UUID userId) {
-        PortfolioResponseDto dto = getPortfolioByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Portfolio", "userId", userId));
-
-        return PortfolioResponseDto.PortfolioExportDto.builder()
-                .exportVersion("1.0")
-                .exportedAt(LocalDateTime.now())
-                .generator("SoodFolio Platform")
-                .portfolio(dto)
-                .build();
-    }
-
     private PortfolioResponseDto mapToDto(Portfolio p) {
+
         long views = p.getId() != null ? analyticsViewRepository.countByPortfolioId(p.getId()) : 0;
         String fullName = p.getUser() != null ? p.getUser().getFullName() : null;
         String avatarUrl = p.getUser() != null ? p.getUser().getAvatarUrl() : null;
@@ -139,6 +129,7 @@ public class PortfolioServiceImpl implements PortfolioService {
                 .statusText(p.getStatusText())
                 .resumeUrl(p.getResumeUrl())
                 .themeMode(p.getThemeMode())
+                .themeConfig(p.getThemeConfig())
                 .isPublished(p.isPublished())
                 .totalViews(views)
                 .showExperience(p.isShowExperience())

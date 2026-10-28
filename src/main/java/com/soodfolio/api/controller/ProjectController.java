@@ -1,8 +1,10 @@
 package com.soodfolio.api.controller;
 
+import com.soodfolio.api.dto.GitHubImportProjectRequest;
 import com.soodfolio.api.dto.PortfolioResponseDto.ProjectDto;
 import com.soodfolio.api.dto.ProjectDtos.ProjectReorderRequestDto;
 import com.soodfolio.api.dto.ProjectDtos.ProjectRequestDto;
+
 import com.soodfolio.api.exception.InvalidCredentialsException;
 import com.soodfolio.api.security.UserPrincipal;
 import com.soodfolio.api.service.ProjectService;
@@ -55,6 +57,18 @@ public class ProjectController {
         ProjectDto created = projectService.createProject(userPrincipal.getId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
+
+    @PostMapping("/import-github")
+    @Operation(summary = "1-Click import a public GitHub repository as a new project slide")
+    public ResponseEntity<ProjectDto> importGitHubProject(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody GitHubImportProjectRequest request
+    ) {
+        validateAuthenticated(userPrincipal);
+        ProjectDto imported = projectService.importFromGitHub(userPrincipal.getId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(imported);
+    }
+
 
     @PutMapping("/{projectId}")
     @Operation(summary = "Update an existing project slide")

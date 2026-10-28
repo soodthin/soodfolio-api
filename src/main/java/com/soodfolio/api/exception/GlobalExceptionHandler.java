@@ -16,6 +16,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -92,8 +95,17 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.CONFLICT, i18nService.getMessage("common.concurrency_conflict"), request);
     }
 
-    // 7. 500 Internal Server Error - Catch-all for unhandled unexpected exceptions
+    // 7. 404 Not Found - Spring Boot 3.4 Resource Not Found
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponseDto> handleNoResourceFound(
+            NoResourceFoundException ex, HttpServletRequest request) {
+        log.warn("Resource path not found [404]: {}", ex.getResourcePath());
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), request);
+    }
+
+    // 8. 500 Internal Server Error - Catch-all for unhandled unexpected exceptions
     @ExceptionHandler(Exception.class)
+
     public ResponseEntity<ErrorResponseDto> handleGlobalException(
             Exception ex, HttpServletRequest request) {
         log.error("Unhandled server error: ", ex);

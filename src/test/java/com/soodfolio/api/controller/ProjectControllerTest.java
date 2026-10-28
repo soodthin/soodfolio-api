@@ -192,4 +192,75 @@ class ProjectControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
     }
+
+    @Test
+    @DisplayName("POST /portfolios/me/projects/import-github - 201 Created when importing GitHub repository")
+    void shouldImportGitHubRepoViaProjectEndpoint() throws Exception {
+        com.soodfolio.api.dto.GitHubImportProjectRequest importRequest = com.soodfolio.api.dto.GitHubImportProjectRequest.builder()
+                .repoName("cloud-native-gateway")
+                .githubUrl("https://github.com/alexdev/cloud-native-gateway")
+                .language("Kotlin")
+                .topics(List.of("k8s", "gateway"))
+                .build();
+
+        ProjectDto importedDto = ProjectDto.builder()
+                .id(UUID.randomUUID())
+                .title("Cloud Native Gateway")
+                .subtitle("cloud-native-gateway")
+                .techStack(List.of("Kotlin", "k8s", "gateway"))
+                .build();
+
+        when(projectService.importFromGitHub(eq(userId), any(com.soodfolio.api.dto.GitHubImportProjectRequest.class)))
+                .thenReturn(importedDto);
+
+        mockMvc.perform(post("/portfolios/me/projects/import-github")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(importRequest)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.title").value("Cloud Native Gateway"))
+                .andExpect(jsonPath("$.subtitle").value("cloud-native-gateway"));
+
+        verify(projectService).importFromGitHub(eq(userId), any(com.soodfolio.api.dto.GitHubImportProjectRequest.class));
+    }
+
+    @Test
+    @DisplayName("PUT /portfolios/me/projects/{id} - 409 Conflict when concurrent modification causes ObjectOptimisticLockingFailureException")
+    void shouldReturn409ConflictOnObjectOptimisticLockingFailure() throws Exception {
+        UUID projectId = sampleProjectDto.getId();
+        ProjectRequestDto updateReq = ProjectRequestDto.builder()
+                .title("Concurrent Project Update")
+                .build();
+
+        when(projectService.updateProject(eq(userId), eq(projectId), any(ProjectRequestDto.class)))
+                .thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException("Project", projectId));
+
+        mockMvc.perform(put("/portfolios/me/projects/{id}", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateReq)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").value("common.concurrency_conflict"));
+    }
+
+    @Test
+    @DisplayName("PUT /portfolios/me/projects/{id} - 409 Conflict when concurrent modification causes OptimisticLockException")
+    void shouldReturn409ConflictOnOptimisticLockException() throws Exception {
+        UUID projectId = sampleProjectDto.getId();
+        ProjectRequestDto updateReq = ProjectRequestDto.builder()
+                .title("Concurrent Project Update")
+                .build();
+
+        when(projectService.updateProject(eq(userId), eq(projectId), any(ProjectRequestDto.class)))
+                .thenThrow(new jakarta.persistence.OptimisticLockException("Row modified concurrently"));
+
+        mockMvc.perform(put("/portfolios/me/projects/{id}", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateReq)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.error").value("Conflict"))
+                .andExpect(jsonPath("$.message").value("common.concurrency_conflict"));
+    }
 }
+

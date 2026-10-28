@@ -212,6 +212,104 @@ class ProjectServiceTest {
     }
 
     @Test
+    @DisplayName("Should import project from GitHub successfully with formatted title and tech stack")
+    void shouldImportProjectFromGitHubSuccessfully() {
+        com.soodfolio.api.dto.GitHubImportProjectRequest importReq = com.soodfolio.api.dto.GitHubImportProjectRequest.builder()
+                .repoName("microservice-order-hub")
+                .description("Order processing system with event-driven architecture")
+                .language("Java")
+                .topics(List.of("kafka", "docker", "spring-boot"))
+                .githubUrl("https://github.com/testuser/microservice-order-hub")
+                .liveUrl("https://orders.example.com")
+                .role("Backend Lead")
+                .periodText("2024 - 2025")
+                .build();
+
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+        when(projectRepository.countByPortfolioId(portfolio.getId())).thenReturn(2);
+        when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> {
+            Project saved = invocation.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        ProjectDto result = projectService.importFromGitHub(userId, importReq);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getTitle()).isEqualTo("Microservice Order Hub");
+        assertThat(result.getSubtitle()).isEqualTo("microservice-order-hub");
+        assertThat(result.getRole()).isEqualTo("Backend Lead");
+        assertThat(result.getPeriodText()).isEqualTo("2024 - 2025");
+        assertThat(result.getTechStack()).containsExactly("Java", "kafka", "docker", "spring-boot");
+        assertThat(result.getHighlights()).isNotEmpty();
+        assertThat(result.getOrderIndex()).isEqualTo(2);
+        assertThat(result.getGithubUrl()).isEqualTo("https://github.com/testuser/microservice-order-hub");
+
+        verify(projectRepository).save(any(Project.class));
+    }
+
+    @Test
+    @DisplayName("Should format complex kebab-case and snake_case repo names, deduplicate techStack, and fallback defaults")
+    void shouldFormatComplexKebabAndSnakeCaseRepoNames() {
+        com.soodfolio.api.dto.GitHubImportProjectRequest complexReq = com.soodfolio.api.dto.GitHubImportProjectRequest.builder()
+                .repoName("ultra_fast-distributed_cache-v2_service")
+                .description("In-memory distributed caching engine")
+                .language("Rust")
+                .topics(List.of("rust", "distributed-systems", "CACHE", "  grpc  "))
+                .githubUrl("https://github.com/testuser/ultra_fast-distributed_cache-v2_service")
+                .role(null)       // Should fallback to default role
+                .periodText("  ") // Should fallback to default periodText
+                .build();
+
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+        when(projectRepository.countByPortfolioId(portfolio.getId())).thenReturn(4);
+        when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> {
+            Project saved = invocation.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        ProjectDto result = projectService.importFromGitHub(userId, complexReq);
+
+        assertThat(result).isNotNull();
+        // Title capitalized per token from split by dash, underscore, whitespace
+        assertThat(result.getTitle()).isEqualTo("Ultra Fast Distributed Cache V2 Service");
+        assertThat(result.getSubtitle()).isEqualTo("ultra_fast-distributed_cache-v2_service");
+        // Role & periodText defaults
+        assertThat(result.getRole()).isEqualTo("Lead Developer / Creator");
+        assertThat(result.getPeriodText()).isEqualTo("Present");
+        // Tech stack: "Rust" added first, "rust" in topics deduplicated case-insensitively, "CACHE", "grpc" trimmed
+        assertThat(result.getTechStack()).containsExactly("Rust", "distributed-systems", "CACHE", "grpc");
+        // OrderIndex sequentially increments from current project count (4)
+        assertThat(result.getOrderIndex()).isEqualTo(4);
+
+        verify(projectRepository).save(any(Project.class));
+    }
+
+    @Test
+    @DisplayName("Should auto-increment orderIndex to 0 when importing as the very first project")
+    void shouldAutoIncrementOrderIndexToZeroWhenNoExistingProjects() {
+        com.soodfolio.api.dto.GitHubImportProjectRequest importReq = com.soodfolio.api.dto.GitHubImportProjectRequest.builder()
+                .repoName("first-repo")
+                .githubUrl("https://github.com/testuser/first-repo")
+                .build();
+
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+        when(projectRepository.countByPortfolioId(portfolio.getId())).thenReturn(0);
+        when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> {
+            Project saved = invocation.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        ProjectDto result = projectService.importFromGitHub(userId, importReq);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getTitle()).isEqualTo("First Repo");
+        assertThat(result.getOrderIndex()).isEqualTo(0);
+    }
+
+    @Test
     @DisplayName("Should throw ResourceNotFoundException when portfolio is missing")
     void shouldThrowWhenPortfolioMissing() {
         when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.empty());
@@ -221,3 +319,4 @@ class ProjectServiceTest {
                 .hasMessageContaining("Portfolio not found with userId");
     }
 }
+
