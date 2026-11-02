@@ -127,6 +127,7 @@ public class SnapshotServiceImpl implements SnapshotService {
         portfolio.setStatusText(data.getStatusText());
         portfolio.setResumeUrl(data.getResumeUrl());
         portfolio.setThemeMode(data.getThemeMode());
+        portfolio.setThemeConfig(data.getThemeConfig());
         portfolio.setShowExperience(data.isShowExperience());
         portfolio.setShowProjects(data.isShowProjects());
         portfolio.setShowSkills(data.isShowSkills());

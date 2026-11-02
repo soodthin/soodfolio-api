@@ -33,3 +33,7 @@ build/
 
 ### macOS ###
 .DS_Store
+
+# Local Uploads & Env
+uploads/
+.env*

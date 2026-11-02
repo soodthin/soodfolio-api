@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS portfolios (
     status_text VARCHAR(100) DEFAULT 'AVAILABLE FOR WORK',
     resume_url TEXT,
     theme_mode VARCHAR(20) DEFAULT 'DARK',-- DARK, LIGHT
+    theme_config TEXT,
     show_experience BOOLEAN NOT NULL DEFAULT TRUE,
     show_projects BOOLEAN NOT NULL DEFAULT TRUE,
     show_skills BOOLEAN NOT NULL DEFAULT TRUE,
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS portfolios (
 );
 
 ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS version INT NOT NULL DEFAULT 0;
+ALTER TABLE portfolios ADD COLUMN IF NOT EXISTS theme_config TEXT;
 
 -- 3. Bảng SOCIAL_LINKS (Liên kết mạng xã hội của portfolio)
 CREATE TABLE IF NOT EXISTS social_links (

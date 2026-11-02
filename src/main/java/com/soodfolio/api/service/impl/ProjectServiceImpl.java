@@ -1,5 +1,6 @@
 package com.soodfolio.api.service.impl;
 
+import com.soodfolio.api.dto.GitHubImportProjectRequest;
 import com.soodfolio.api.dto.PortfolioResponseDto.ProjectDto;
 import com.soodfolio.api.dto.ProjectDtos.ProjectRequestDto;
 import com.soodfolio.api.entity.Portfolio;
@@ -139,6 +140,86 @@ public class ProjectServiceImpl implements ProjectService {
                 .map(this::mapToDto)
                 .toList();
     }
+
+    @Override
+    @Transactional
+    public ProjectDto importFromGitHub(UUID userId, GitHubImportProjectRequest request) {
+        Portfolio portfolio = portfolioRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Portfolio", "userId", userId));
+
+        int currentCount = projectRepository.countByPortfolioId(portfolio.getId());
+
+        String formattedTitle = formatRepoTitle(request.getRepoName());
+
+        List<String> techStack = new ArrayList<>();
+        if (request.getLanguage() != null && !request.getLanguage().isBlank()) {
+            techStack.add(request.getLanguage().trim());
+        }
+        if (request.getTopics() != null) {
+            for (String topic : request.getTopics()) {
+                if (topic != null && !topic.isBlank()) {
+                    String trimmed = topic.trim();
+                    if (techStack.stream().noneMatch(t -> t.equalsIgnoreCase(trimmed))) {
+                        techStack.add(trimmed);
+                    }
+                }
+            }
+        }
+
+        List<String> highlights = new ArrayList<>();
+        highlights.add("Open-source repository imported from GitHub");
+        if (request.getLanguage() != null && !request.getLanguage().isBlank()) {
+            highlights.add("Primary language: " + request.getLanguage().trim());
+        }
+        if (techStack.size() > 1) {
+            highlights.add("Tech stack: " + String.join(", ", techStack));
+        }
+
+        String role = (request.getRole() != null && !request.getRole().isBlank())
+                ? request.getRole()
+                : "Lead Developer / Creator";
+        String periodText = (request.getPeriodText() != null && !request.getPeriodText().isBlank())
+                ? request.getPeriodText()
+                : "Present";
+
+        Project project = Project.builder()
+                .portfolio(portfolio)
+                .title(formattedTitle)
+                .subtitle(request.getRepoName())
+                .role(role)
+                .periodText(periodText)
+                .description(request.getDescription())
+                .highlights(highlights)
+                .techStack(techStack)
+                .liveUrl(request.getLiveUrl())
+                .githubUrl(request.getGithubUrl())
+                .orderIndex(currentCount)
+                .build();
+
+        Project saved = projectRepository.save(project);
+        return mapToDto(saved);
+    }
+
+    private String formatRepoTitle(String repoName) {
+        if (repoName == null || repoName.isBlank()) {
+            return "Untitled Project";
+        }
+        String[] parts = repoName.split("[-_\\s]+");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (!part.isEmpty()) {
+                if (!sb.isEmpty()) {
+                    sb.append(" ");
+                }
+                sb.append(Character.toUpperCase(part.charAt(0)));
+                if (part.length() > 1) {
+                    sb.append(part.substring(1));
+                }
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : repoName;
+    }
+
 
     private ProjectDto mapToDto(Project p) {
         return ProjectDto.builder()

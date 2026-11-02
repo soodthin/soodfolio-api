@@ -3,7 +3,6 @@ package com.soodfolio.api.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.soodfolio.api.dto.AnalyticsDtos.ViewCountResponseDto;
 import com.soodfolio.api.dto.PortfolioResponseDto;
-import com.soodfolio.api.dto.PortfolioResponseDto.PortfolioExportDto;
 import com.soodfolio.api.dto.UpdatePortfolioRequestDto;
 import com.soodfolio.api.exception.GlobalExceptionHandler;
 import com.soodfolio.api.exception.ResourceNotFoundException;
@@ -14,13 +13,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.MethodParameter;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.support.WebDataBinderFactory;
@@ -32,9 +32,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -144,6 +146,66 @@ class PortfolioControllerTest {
     }
 
     @Test
+    @DisplayName("PATCH /portfolios/me - 200 OK with themeConfig in request payload")
+    void shouldUpdateThemeConfigViaPatchSuccessfully() throws Exception {
+        String themeConfigJson = "{\"preset\":\"spotlight-focus\"}";
+        UpdatePortfolioRequestDto updateRequest = UpdatePortfolioRequestDto.builder()
+                .title("SOOD THIN")
+                .themeConfig(themeConfigJson)
+                .build();
+
+        PortfolioResponseDto updatedDto = PortfolioResponseDto.builder()
+                .id(samplePortfolioDto.getId())
+                .username("soodthin")
+                .title("SOOD THIN")
+                .tagline("FULLSTACK ENGINEER")
+                .isPublished(true)
+                .themeConfig(themeConfigJson)
+                .build();
+
+        when(portfolioService.updatePortfolio(eq(userId), any(UpdatePortfolioRequestDto.class)))
+                .thenReturn(updatedDto);
+
+        mockMvc.perform(patch("/portfolios/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("soodthin"))
+                .andExpect(jsonPath("$.themeConfig").value(themeConfigJson));
+
+        ArgumentCaptor<UpdatePortfolioRequestDto> captor = ArgumentCaptor.forClass(UpdatePortfolioRequestDto.class);
+        verify(portfolioService).updatePortfolio(eq(userId), captor.capture());
+        assertThat(captor.getValue().getThemeConfig()).isEqualTo(themeConfigJson);
+    }
+
+    @Test
+    @DisplayName("PUT /portfolios/me - 200 OK with themeConfig verifying backward compatibility")
+    void shouldUpdateThemeConfigViaPutBackwardCompatible() throws Exception {
+        String themeConfigJson = "{\"preset\":\"editorial-clean\"}";
+        UpdatePortfolioRequestDto updateRequest = UpdatePortfolioRequestDto.builder()
+                .title("SOOD THIN (UPDATED)")
+                .themeConfig(themeConfigJson)
+                .build();
+
+        PortfolioResponseDto updatedDto = PortfolioResponseDto.builder()
+                .id(samplePortfolioDto.getId())
+                .username("soodthin")
+                .title("SOOD THIN (UPDATED)")
+                .themeConfig(themeConfigJson)
+                .build();
+
+        when(portfolioService.updatePortfolio(eq(userId), any(UpdatePortfolioRequestDto.class)))
+                .thenReturn(updatedDto);
+
+        mockMvc.perform(put("/portfolios/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("SOOD THIN (UPDATED)"))
+                .andExpect(jsonPath("$.themeConfig").value(themeConfigJson));
+    }
+
+    @Test
     @DisplayName("PATCH /portfolios/me/status - 200 OK to toggle isPublished")
     void shouldUpdateStatusSuccessfully() throws Exception {
         when(portfolioService.updatePublishedStatus(userId, false)).thenReturn(samplePortfolioDto);
@@ -155,25 +217,9 @@ class PortfolioControllerTest {
     }
 
     @Test
-    @DisplayName("GET /portfolios/me/export - 200 OK with attachment header")
-    void shouldExportPortfolioSuccessfully() throws Exception {
-        PortfolioExportDto exportDto = PortfolioExportDto.builder()
-                .exportVersion("1.0")
-                .generator("SoodFolio Platform")
-                .portfolio(samplePortfolioDto)
-                .build();
-
-        when(portfolioService.exportPortfolio(userId)).thenReturn(exportDto);
-
-        mockMvc.perform(get("/portfolios/me/export"))
-                .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"soodfolio-soodthin-export.json\""))
-                .andExpect(jsonPath("$.exportVersion").value("1.0"));
-    }
-
-    @Test
     @DisplayName("GET /portfolios/{username} - 200 OK for public view")
     void shouldReturnPublicPortfolio() throws Exception {
+
         when(portfolioService.getPortfolioByUsername("soodthin")).thenReturn(Optional.of(samplePortfolioDto));
 
         mockMvc.perform(get("/portfolios/soodthin"))

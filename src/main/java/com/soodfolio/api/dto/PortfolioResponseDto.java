@@ -4,9 +4,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
 
 @Data
 @Builder
@@ -21,6 +21,7 @@ public class PortfolioResponseDto {
     private String statusText;
     private String resumeUrl;
     private String themeMode;
+    private String themeConfig;
     @JsonProperty("isPublished")
     private boolean isPublished;
     private long totalViews;
@@ -96,13 +97,5 @@ public class PortfolioResponseDto {
         private String highlights;
         private int orderIndex;
     }
-
-    @Data
-    @Builder
-    public static class PortfolioExportDto {
-        private String exportVersion;
-        private LocalDateTime exportedAt;
-        private String generator;
-        private PortfolioResponseDto portfolio;
-    }
 }
+

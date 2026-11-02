@@ -1,5 +1,6 @@
 package com.soodfolio.api.service;
 
+import com.soodfolio.api.dto.GitHubImportProjectRequest;
 import com.soodfolio.api.dto.PortfolioResponseDto.ProjectDto;
 import com.soodfolio.api.dto.ProjectDtos.ProjectRequestDto;
 
@@ -13,4 +14,7 @@ public interface ProjectService {
     ProjectDto updateProject(UUID userId, UUID projectId, ProjectRequestDto request);
     void deleteProject(UUID userId, UUID projectId);
     List<ProjectDto> reorderProjects(UUID userId, List<UUID> projectIds);
+    ProjectDto importFromGitHub(UUID userId, GitHubImportProjectRequest request);
 }
+
+
