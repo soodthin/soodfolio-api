@@ -7,9 +7,9 @@ spring:
   application:
     name: soodfolio-api
   datasource:
-    url: jdbc:postgresql://localhost:5432/soodfolio_db
-    username: postgres
-    password: Admin123
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:soodfolio_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:Admin123}
     driver-class-name: org.postgresql.Driver
   sql:
     init:
@@ -43,6 +43,12 @@ app:
     google:
       client-id: ${GOOGLE_CLIENT_ID:622903719114-lilk7gbj5jcc138eva810gvr7uva3fqe.apps.googleusercontent.com}
       client-secret: ${GOOGLE_CLIENT_SECRET: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}
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
+    base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+    timeout-seconds: ${GEMINI_TIMEOUT_SECONDS:8}
+    rate-limit-per-minute: ${GEMINI_RATE_LIMIT_PER_MIN:15}
 
 # Swagger / OpenAPI
 springdoc:
