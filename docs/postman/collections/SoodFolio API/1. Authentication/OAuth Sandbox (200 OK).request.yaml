@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/oauth/sandbox"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "provider": "GITHUB",
+      "email": "developer@github.test",
+      "fullName": "GitHub Elite Engineer",
+      "username": "github_dev"
+    }
+order: 7000

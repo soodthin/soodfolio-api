@@ -2,6 +2,7 @@ package com.soodfolio.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
 import java.util.List;
@@ -24,8 +25,14 @@ public class ProjectDtos {
         private String description;
         private List<String> highlights;
         private List<String> techStack;
+
+        @Pattern(regexp = "^$|^https?://.*", message = "{validation.url.invalid}")
         private String liveUrl;
+
+        @Pattern(regexp = "^$|^https?://.*", message = "{validation.url.invalid}")
         private String githubUrl;
+
+        @Pattern(regexp = "^$|^(https?://|/api/v1/uploads/).*", message = "{validation.url.invalid}")
         private String imageUrl;
     }
 

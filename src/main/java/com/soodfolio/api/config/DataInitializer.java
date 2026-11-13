@@ -6,6 +6,8 @@ import com.soodfolio.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,114 +22,14 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PortfolioRepository portfolioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final Environment env;
 
     @Override
     @Transactional
     public void run(String... args) {
-        seedAlex();
         seedSoodthin();
-    }
-
-    private void seedAlex() {
-        if (portfolioRepository.findByUsername("alex").isPresent()) {
-            log.info("Sample portfolio 'alex' already exists. Skipping seed.");
-            return;
-        }
-
-        log.info("Seeding initial portfolio 'alex'...");
-
-        User user = User.builder()
-                .email("alex@soodfolio.com")
-                .fullName("Alex Nguyen")
-                .passwordHash(passwordEncoder.encode("Admin123"))
-                .role("ROLE_USER")
-                .authProvider("LOCAL")
-                .build();
-        userRepository.save(user);
-
-        Portfolio portfolio = Portfolio.builder()
-                .user(user)
-                .username("alex")
-                .title("ALEX NGUYEN")
-                .tagline("SENIOR FULLSTACK DEVELOPER")
-                .bio("I design and build high-performance web applications with minimalist aesthetics, clean architecture, and delightful user interactions.")
-                .statusText("AVAILABLE FOR WORK")
-                .themeMode("DARK")
-                .build();
-
-        // Social Links
-        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("GITHUB").url("https://github.com/soodthin").label("[ GitHub ]").orderIndex(0).build());
-        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("LINKEDIN").url("https://linkedin.com").label("[ LinkedIn ]").orderIndex(1).build());
-        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("EMAIL").url("mailto:alex@example.com").label("[ Email ]").orderIndex(2).build());
-
-        // Experiences
-        portfolio.getExperiences().add(Experience.builder()
-                .portfolio(portfolio)
-                .roleTitle("Senior Fullstack Engineer")
-                .companyName("TechCorp Innovations")
-                .companyUrl("https://techcorp.example.com")
-                .location("Ho Chi Minh City, Vietnam")
-                .periodText("2024 — PRESENT")
-                .description("Architecting and building scalable microservices and presentation-first web applications.")
-                .highlights(List.of(
-                        "Designed event-driven backend reducing API latency by 45%",
-                        "Led migration of legacy monolith to Spring Boot 3 & Next.js App Router",
-                        "Mentored 6 junior and mid-level engineers"
-                ))
-                .skillsUsed(List.of("Spring Boot 3", "Java 17", "PostgreSQL", "Next.js", "Docker"))
-                .orderIndex(0)
-                .build());
-
-        // Projects
-        portfolio.getProjects().add(Project.builder()
-                .portfolio(portfolio)
-                .title("FlexiConnect")
-                .subtitle("Enterprise B2B Integration Platform")
-                .role("Lead Architect")
-                .periodText("2024")
-                .description("A high-throughput API gateway and event routing system connecting 30+ enterprise ERPs.")
-                .highlights(List.of("Processed 10M+ daily events with 99.99% uptime", "Implemented automated retry and dead-letter queues"))
-                .techStack(List.of("Java 17", "Spring Boot", "Kafka", "PostgreSQL", "Redis"))
-                .liveUrl("https://flexiconnect.demo")
-                .githubUrl("https://github.com/soodthin/flexiconnect")
-                .orderIndex(0)
-                .build());
-
-        portfolio.getProjects().add(Project.builder()
-                .portfolio(portfolio)
-                .title("SoodFolio Platform")
-                .subtitle("Slide-Deck Portfolio SaaS for Developers")
-                .role("Creator & Fullstack Developer")
-                .periodText("2026")
-                .description("Interactive presentation-style portfolio builder empowering tech professionals to showcase their work.")
-                .highlights(List.of("Minimalist typographic design with zero emojis/icons", "Multi-tenant routing with instant static generation"))
-                .techStack(List.of("Next.js 16", "Spring Boot 3", "Tailwind CSS", "PostgreSQL"))
-                .liveUrl("https://soodfolio.vercel.app")
-                .githubUrl("https://github.com/soodthin/soodfolio-web")
-                .orderIndex(1)
-                .build());
-
-        // Skills
-        portfolio.getSkills().add(Skill.builder().portfolio(portfolio).category("BACKEND").name("Java 17/21").orderIndex(0).build());
-        portfolio.getSkills().add(Skill.builder().portfolio(portfolio).category("BACKEND").name("Spring Boot 3").orderIndex(1).build());
-        portfolio.getSkills().add(Skill.builder().portfolio(portfolio).category("BACKEND").name("Spring Security").orderIndex(2).build());
-        portfolio.getSkills().add(Skill.builder().portfolio(portfolio).category("FRONTEND").name("TypeScript").orderIndex(3).build());
-        portfolio.getSkills().add(Skill.builder().portfolio(portfolio).category("FRONTEND").name("Next.js 16").orderIndex(4).build());
-        portfolio.getSkills().add(Skill.builder().portfolio(portfolio).category("DATABASE").name("PostgreSQL").orderIndex(5).build());
-
-        // Education
-        portfolio.getEducations().add(Education.builder()
-                .portfolio(portfolio)
-                .institution("University of Technology")
-                .degree("Bachelor of Science")
-                .fieldOfStudy("Computer Science")
-                .periodText("2020 — 2024")
-                .highlights("Graduated with Honors. Specialization in Distributed Systems & Software Architecture.")
-                .orderIndex(0)
-                .build());
-
-        portfolioRepository.save(portfolio);
-        log.info("Sample portfolio 'alex' seeded successfully!");
+        seedDemo();
+        seedAdmin();
     }
 
     private void seedSoodthin() {
@@ -139,27 +41,79 @@ public class DataInitializer implements CommandLineRunner {
         log.info("Seeding authentic portfolio 'soodthin' (Thai Do Thinh)...");
 
         User user = userRepository.findByEmail("thinhthai963@gmail.com")
-                .orElseGet(() -> {
-                    User newUser = User.builder()
-                            .email("thinhthai963@gmail.com")
-                            .fullName("Thai Do Thinh")
-                            .passwordHash(passwordEncoder.encode("Admin123"))
-                            .role("ROLE_USER")
-                            .authProvider("LOCAL")
-                            .avatarUrl("/images/avatar.jpg")
-                            .build();
-                    return userRepository.save(newUser);
-                });
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .email("thinhthai963@gmail.com")
+                        .fullName("Thai Do Thinh")
+                        .passwordHash(passwordEncoder.encode("Admin123"))
+                        .role("ROLE_USER")
+                        .authProvider("LOCAL")
+                        .avatarUrl("/images/avatar.jpg")
+                        .build()));
 
+        Portfolio portfolio = createThaiDoThinhPortfolio(user, "soodthin");
+        portfolioRepository.save(portfolio);
+        log.info("Portfolio 'soodthin' seeded successfully!");
+    }
+
+    private void seedDemo() {
+        if (portfolioRepository.findByUsername("demo").isPresent()) {
+            log.info("Portfolio 'demo' already exists. Skipping seed.");
+            return;
+        }
+
+        log.info("Seeding demo portfolio 'demo'...");
+
+        boolean isDevOrLocal = env.acceptsProfiles(Profiles.of("dev", "local"));
+        String passwordHash = isDevOrLocal ? passwordEncoder.encode("Admin123") : null;
+
+        User user = userRepository.findByEmail("demo@soodfolio.com")
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .email("demo@soodfolio.com")
+                        .fullName("Thai Do Thinh (Demo)")
+                        .passwordHash(passwordHash)
+                        .role("ROLE_USER")
+                        .authProvider("LOCAL")
+                        .avatarUrl("/images/avatar.jpg")
+                        .build()));
+
+        Portfolio portfolio = createThaiDoThinhPortfolio(user, "demo");
+        portfolioRepository.save(portfolio);
+        log.info("Portfolio 'demo' seeded successfully (passwordHash={})!", isDevOrLocal ? "SET" : "NULL");
+    }
+
+    private void seedAdmin() {
+        boolean isDevOrLocal = env.acceptsProfiles(Profiles.of("dev", "local"));
+        if (!isDevOrLocal) {
+            return;
+        }
+
+        if (userRepository.findByEmail("admin@soodfolio.dev").isPresent()) {
+            return;
+        }
+
+        log.info("Seeding local admin user 'admin@soodfolio.dev'...");
+        User admin = User.builder()
+                .email("admin@soodfolio.dev")
+                .fullName("Platform Administrator")
+                .passwordHash(passwordEncoder.encode("Admin123"))
+                .role("ROLE_ADMIN")
+                .authProvider("LOCAL")
+                .build();
+        userRepository.save(admin);
+        log.info("Admin user seeded successfully!");
+    }
+
+    private Portfolio createThaiDoThinhPortfolio(User user, String username) {
         Portfolio portfolio = Portfolio.builder()
                 .user(user)
-                .username("soodthin")
+                .username(username)
                 .title("THAI DO THINH")
                 .tagline("SOFTWARE ENGINEER · FULL-STACK DEVELOPER")
                 .bio("Final-year Computer Science student at Ho Chi Minh City Open University who has built and deployed several real web products, from database design to frontend and backend. Comfortable with Java, Python, JavaScript, TypeScript, C++, and frameworks like React and Spring Boot. I combine solid fundamental engineering with modern AI-assisted workflows to deliver high quality, reliable software quickly.")
                 .statusText("AVAILABLE FOR DEVELOPER ROLES // READY TO DEPLOY")
                 .resumeUrl("#transmit")
                 .themeMode("DARK")
+                .isPublished(true)
                 .build();
 
         // Social Links
@@ -287,7 +241,6 @@ public class DataInitializer implements CommandLineRunner {
                 .orderIndex(0)
                 .build());
 
-        portfolioRepository.save(portfolio);
-        log.info("Portfolio 'soodthin' seeded successfully!");
+        return portfolio;
     }
 }

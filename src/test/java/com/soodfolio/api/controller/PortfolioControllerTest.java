@@ -238,6 +238,61 @@ class PortfolioControllerTest {
     }
 
     @Test
+    @DisplayName("GET /portfolios/{username} - 404 Not Found when anonymous guest accesses draft portfolio")
+    void shouldReturn404WhenAnonymousGuestAccessesDraftPortfolio() throws Exception {
+        when(portfolioService.getPortfolioByUsername("draftuser"))
+                .thenThrow(new ResourceNotFoundException("Portfolio", "username", "draftuser"));
+
+        mockMvc.perform(get("/portfolios/draftuser")
+                        .header("X-Anonymous", "true"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    @DisplayName("GET /portfolios/{username} - 404 Not Found when non-owner accesses draft portfolio")
+    void shouldReturn404WhenOtherUserAccessesDraftPortfolio() throws Exception {
+        when(portfolioService.getPortfolioByUsername("draftuser"))
+                .thenThrow(new ResourceNotFoundException("Portfolio", "username", "draftuser"));
+
+        mockMvc.perform(get("/portfolios/draftuser"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    @DisplayName("GET /portfolios/{username} - 200 OK when owner accesses draft portfolio")
+    void shouldReturn200WhenOwnerAccessesDraftPortfolio() throws Exception {
+        PortfolioResponseDto draftDto = PortfolioResponseDto.builder()
+                .id(UUID.randomUUID())
+                .username("draftuser")
+                .title("Draft Portfolio")
+                .isPublished(false)
+                .build();
+
+        when(portfolioService.getPortfolioByUsername("draftuser"))
+                .thenReturn(Optional.of(draftDto));
+
+        mockMvc.perform(get("/portfolios/draftuser"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("draftuser"))
+                .andExpect(jsonPath("$.isPublished").value(false));
+    }
+
+    @Test
+    @DisplayName("POST /portfolios/{username}/views - 404 Not Found when recording view on draft portfolio")
+    void shouldReturn404WhenRecordingViewOnDraftPortfolio() throws Exception {
+        when(portfolioService.recordView(eq("draftuser"), any(), any()))
+                .thenThrow(new ResourceNotFoundException("Portfolio", "username", "draftuser"));
+
+        mockMvc.perform(post("/portfolios/draftuser/views")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
     @DisplayName("POST /portfolios/{username}/views - 201 Created on recording view impression")
     void shouldRecordViewImpression() throws Exception {
         ViewCountResponseDto viewResponse = ViewCountResponseDto.builder()

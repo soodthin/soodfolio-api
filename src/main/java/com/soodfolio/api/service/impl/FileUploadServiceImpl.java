@@ -12,6 +12,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -122,6 +123,9 @@ public class FileUploadServiceImpl implements FileUploadService {
             throw new BadRequestException(msg("upload.extension_unsupported", "Phần mở rộng tệp không được hỗ trợ: {0}", extension));
         }
 
+        // Validate Magic Bytes strictly according to file format and reject SVG
+        validateMagicBytes(file, extension, contentType);
+
         // Anti-Path Traversal & Collision: Random UUID naming
         String newFileName = UUID.randomUUID() + extension;
 
@@ -139,7 +143,7 @@ public class FileUploadServiceImpl implements FileUploadService {
 
             Files.copy(file.getInputStream(), targetFile, StandardCopyOption.REPLACE_EXISTING);
 
-            String relativeUrl = "/uploads/" + subDirName + "/" + newFileName;
+            String relativeUrl = "/api/v1/uploads/" + subDirName + "/" + newFileName;
 
             log.info("File uploaded successfully: {} -> {}", originalFileName, relativeUrl);
 
@@ -153,6 +157,50 @@ public class FileUploadServiceImpl implements FileUploadService {
         } catch (IOException e) {
             log.error("Failed to store file: ", e);
             throw new RuntimeException(msg("upload.storage_error", "Lỗi trong quá trình lưu trữ tệp: {0}", e.getMessage()), e);
+        }
+    }
+
+    private void validateMagicBytes(MultipartFile file, String extension, String contentType) {
+        if (".svg".equalsIgnoreCase(extension) ||
+                (contentType != null && (contentType.equalsIgnoreCase("image/svg+xml") || contentType.toLowerCase().contains("svg")))) {
+            throw new BadRequestException(msg("upload.svg_disallowed", "Tệp SVG không được phép tải lên vì lý do bảo mật."));
+        }
+
+        byte[] header = new byte[12];
+        int bytesRead;
+        try (InputStream is = file.getInputStream()) {
+            bytesRead = is.read(header);
+        } catch (IOException e) {
+            throw new BadRequestException(msg("upload.storage_error", "Không thể đọc nội dung tệp: {0}", e.getMessage()));
+        }
+
+        if (bytesRead < 3) {
+            throw new BadRequestException(msg("upload.magic_bytes_invalid", "Tệp tải lên không hợp lệ hoặc dữ liệu quá ngắn."));
+        }
+
+        boolean isValid = switch (extension.toLowerCase()) {
+            case ".jpg", ".jpeg" -> ((header[0] & 0xFF) == 0xFF && (header[1] & 0xFF) == 0xD8 && (header[2] & 0xFF) == 0xFF);
+            case ".png" -> (bytesRead >= 8 &&
+                    (header[0] & 0xFF) == 0x89 &&
+                    header[1] == 0x50 && // P
+                    header[2] == 0x4E && // N
+                    header[3] == 0x47 && // G
+                    header[4] == 0x0D &&
+                    header[5] == 0x0A &&
+                    header[6] == 0x1A &&
+                    header[7] == 0x0A);
+            case ".gif" -> (bytesRead >= 4 &&
+                    header[0] == 'G' && header[1] == 'I' && header[2] == 'F' && header[3] == '8');
+            case ".webp" -> (bytesRead >= 12 &&
+                    header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F' &&
+                    header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P');
+            case ".pdf" -> (bytesRead >= 5 &&
+                    header[0] == '%' && header[1] == 'P' && header[2] == 'D' && header[3] == 'F' && header[4] == '-');
+            default -> false;
+        };
+
+        if (!isValid) {
+            throw new BadRequestException(msg("upload.magic_bytes_invalid", "Cấu trúc dữ liệu tệp (Magic Bytes) không khớp với định dạng cho phép: {0}", extension));
         }
     }
 

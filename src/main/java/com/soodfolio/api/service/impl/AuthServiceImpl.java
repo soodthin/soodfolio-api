@@ -317,14 +317,6 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthDtos.AuthResponse processOAuthLogin(AuthDtos.OAuthLoginRequest request) {
-        AuthDtos.OAuthSandboxRequest sandboxReq = new AuthDtos.OAuthSandboxRequest();
-        sandboxReq.setProvider(request.getProvider());
-        return processOAuthSandbox(sandboxReq);
-    }
-
-    @Override
-    @Transactional
     public AuthDtos.AuthResponse exchangeOAuthCode(AuthDtos.OAuthExchangeRequest request) {
         String provider = request.getProvider().toUpperCase().trim();
         String code = request.getCode() != null ? request.getCode().trim() : "";

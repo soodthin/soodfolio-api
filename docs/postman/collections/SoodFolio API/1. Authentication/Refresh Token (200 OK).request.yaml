@@ -1,5 +1,5 @@
 $kind: http-request
-url: "{{baseUrl}}/auth/refresh-token"
+url: "{{baseUrl}}/auth/refresh"
 method: POST
 headers:
   Content-Type: application/json

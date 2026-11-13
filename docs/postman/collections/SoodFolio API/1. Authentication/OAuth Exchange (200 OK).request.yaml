@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/oauth/exchange"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "provider": "GITHUB",
+      "code": "auth-code-12345",
+      "state": "mock-state-token"
+    }
+order: 6000

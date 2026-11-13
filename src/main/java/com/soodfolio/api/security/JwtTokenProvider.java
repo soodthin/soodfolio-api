@@ -4,6 +4,7 @@ import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -16,11 +17,27 @@ import java.util.UUID;
 @Slf4j
 public class JwtTokenProvider {
 
-    @Value("${app.jwt.secret}")
+    @Value("${app.jwt.secret:}")
     private String jwtSecret;
 
-    // Access token valid for 30 minutes (1800000 ms)
-    private final long jwtExpirationMs = 30 * 60 * 1000;
+    @Value("${app.jwt.expiration-ms:1800000}")
+    private long jwtExpirationMs;
+
+    @PostConstruct
+    public void validateJwtSecret() {
+        if (jwtSecret == null || jwtSecret.isBlank()) {
+            throw new IllegalStateException("JWT secret key must not be null or blank");
+        }
+        byte[] decodedKey;
+        try {
+            decodedKey = Decoders.BASE64.decode(jwtSecret);
+        } catch (Exception e) {
+            throw new IllegalStateException("JWT secret key must be a valid Base64-encoded string: " + e.getMessage(), e);
+        }
+        if (decodedKey.length < 32) {
+            throw new IllegalStateException("JWT secret key must be at least 256 bits (32 bytes), but got " + (decodedKey.length * 8) + " bits (" + decodedKey.length + " bytes)");
+        }
+    }
 
     private Key key() {
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
