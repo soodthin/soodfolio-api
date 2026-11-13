@@ -33,6 +33,8 @@ spring:
 
 # JWT, CORS & OAuth2 Configuration
 app:
+  cloudinary:
+    url: ${CLOUDINARY_URL:}
   upload:
     dir: uploads
   cors:

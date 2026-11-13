@@ -137,6 +137,7 @@ public class ShareLinkDtos {
         private String companyName;
         private int totalViews;
         private long totalDwellSeconds;
+        private LocalDateTime lastViewedAt;
         private List<SlideTelemetryStatDto> slideStats;
         private Map<String, Long> deviceBreakdown;
     }

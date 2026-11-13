@@ -177,11 +177,17 @@ public class ShareLinkServiceImpl implements ShareLinkService {
                         Collectors.counting()
                 ));
 
+        LocalDateTime lastViewedAt = telemetryRepository
+                .findTopByShareLinkIdOrderByCreatedAtDesc(link.getId())
+                .map(ShareLinkTelemetry::getCreatedAt)
+                .orElse(null);
+
         return TelemetryAnalyticsResponse.builder()
                 .shareLinkId(link.getId())
                 .companyName(link.getCompanyName())
                 .totalViews(link.getViewCount())
                 .totalDwellSeconds(totalDwellSeconds)
+                .lastViewedAt(lastViewedAt)
                 .slideStats(slideStats)
                 .deviceBreakdown(deviceBreakdown)
                 .build();
@@ -262,10 +268,11 @@ public class ShareLinkServiceImpl implements ShareLinkService {
     private void filterAllowedSlides(PortfolioResponseDto dto, List<String> allowedSlideIds) {
         boolean specifiesGeneralSlides = allowedSlideIds.stream()
                 .anyMatch(s -> s.equalsIgnoreCase("experience") || s.equalsIgnoreCase("education")
-                        || s.equalsIgnoreCase("skills") || s.equalsIgnoreCase("contact") || s.equalsIgnoreCase("projects"));
+                        || s.equalsIgnoreCase("skills") || s.equalsIgnoreCase("contact") || s.equalsIgnoreCase("projects")
+                        || s.startsWith("project-") || s.startsWith("exp-"));
 
         if (specifiesGeneralSlides) {
-            dto.setShowExperience(allowedSlideIds.stream().anyMatch(s -> s.equalsIgnoreCase("experience")));
+            dto.setShowExperience(allowedSlideIds.stream().anyMatch(s -> s.equalsIgnoreCase("experience") || s.startsWith("exp-")));
             dto.setShowEducation(allowedSlideIds.stream().anyMatch(s -> s.equalsIgnoreCase("education")));
             dto.setShowSkills(allowedSlideIds.stream().anyMatch(s -> s.equalsIgnoreCase("skills")));
             dto.setShowContact(allowedSlideIds.stream().anyMatch(s -> s.equalsIgnoreCase("contact")));
@@ -284,6 +291,22 @@ public class ShareLinkServiceImpl implements ShareLinkService {
             if (hasSpecificMatch) {
                 dto.setProjects(dto.getProjects().stream()
                         .filter(p -> p.getId() != null && targetProjectIds.contains(p.getId().toString()))
+                        .toList());
+            }
+        }
+
+        // Filter experiences by ID if experience IDs are specified in allowedSlideIds
+        List<String> targetExperienceIds = allowedSlideIds.stream()
+                .map(s -> s.startsWith("exp-") ? s.substring("exp-".length()) : s)
+                .toList();
+
+        if (dto.getExperiences() != null && !dto.getExperiences().isEmpty()) {
+            boolean hasSpecificMatch = dto.getExperiences().stream()
+                    .anyMatch(e -> e.getId() != null && targetExperienceIds.contains(e.getId().toString()));
+
+            if (hasSpecificMatch) {
+                dto.setExperiences(dto.getExperiences().stream()
+                        .filter(e -> e.getId() != null && targetExperienceIds.contains(e.getId().toString()))
                         .toList());
             }
         }

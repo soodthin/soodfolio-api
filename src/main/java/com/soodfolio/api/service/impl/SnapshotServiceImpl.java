@@ -11,6 +11,7 @@ import com.soodfolio.api.exception.BadRequestException;
 import com.soodfolio.api.exception.ResourceNotFoundException;
 import com.soodfolio.api.repository.PortfolioRepository;
 import com.soodfolio.api.repository.PortfolioSnapshotRepository;
+import com.soodfolio.api.repository.UserRepository;
 import com.soodfolio.api.service.PortfolioService;
 import com.soodfolio.api.service.SnapshotService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class SnapshotServiceImpl implements SnapshotService {
     private final PortfolioRepository portfolioRepository;
     private final PortfolioSnapshotRepository snapshotRepository;
     private final PortfolioService portfolioService;
+    private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -120,6 +122,16 @@ public class SnapshotServiceImpl implements SnapshotService {
                 .orElseThrow(() -> new ResourceNotFoundException("Snapshot", "version", version));
 
         PortfolioResponseDto data = deserializeSnapshot(snapshot.getSnapshotData());
+
+        if (portfolio.getUser() != null) {
+            if (data.getFullName() != null && !data.getFullName().isBlank()) {
+                portfolio.getUser().setFullName(data.getFullName());
+            }
+            if (data.getAvatarUrl() != null) {
+                portfolio.getUser().setAvatarUrl(data.getAvatarUrl());
+            }
+            userRepository.save(portfolio.getUser());
+        }
 
         portfolio.setTitle(data.getTitle());
         portfolio.setTagline(data.getTagline());
