@@ -6,6 +6,7 @@ import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -87,11 +88,11 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, i18nService.getMessage("upload.server_size_exceeded"), request);
     }
 
-    // 6. 409 Conflict - Optimistic Locking Concurrency Failures
-    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class})
+    // 6. 409 Conflict - Optimistic Locking & Data Integrity Concurrency Failures
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockException.class, DataIntegrityViolationException.class})
     public ResponseEntity<ErrorResponseDto> handleOptimisticLockingFailure(
             Exception ex, HttpServletRequest request) {
-        log.warn("Optimistic locking conflict: {}", ex.getMessage());
+        log.warn("Optimistic locking or concurrency conflict: {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.CONFLICT, i18nService.getMessage("common.concurrency_conflict"), request);
     }
 

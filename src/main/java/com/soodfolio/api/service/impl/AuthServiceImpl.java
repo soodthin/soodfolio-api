@@ -16,6 +16,7 @@ import com.soodfolio.api.security.JwtTokenProvider;
 import com.soodfolio.api.security.SecurityUtils;
 import com.soodfolio.api.security.UserPrincipal;
 import com.soodfolio.api.service.AuthService;
+import com.soodfolio.api.service.EmailService;
 import com.soodfolio.api.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +58,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
+    private final EmailService emailService;
 
     @Value("${app.oauth2.sandbox-enabled:false}")
     private boolean sandboxEnabled;
@@ -78,6 +80,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Value("${app.auth.log-reset-link:false}")
     private boolean logResetLink;
+
+    @Value("${app.frontend.base-url:http://localhost:3000}")
+    private String frontendBaseUrl;
 
     private final RestClient restClient = RestClient.create();
 
@@ -241,10 +246,17 @@ public class AuthServiceImpl implements AuthService {
 
             passwordResetTokenRepository.save(resetToken);
 
+            String baseUrl = (frontendBaseUrl != null && !frontendBaseUrl.isBlank())
+                    ? frontendBaseUrl.replaceAll("/+$", "")
+                    : "http://localhost:3000";
+            String resetLink = baseUrl + "/reset-password?token=" + rawToken;
+
+            emailService.sendPasswordResetEmail(user.getEmail(), user.getFullName(), resetLink);
+
             if (logResetLink) {
                 log.info("=======================================================================");
                 log.info("[SOODFOLIO] PASSWORD RESET REQUESTED FOR: {}", cleanEmail);
-                log.info("[SOODFOLIO] RESET LINK: http://localhost:3000/reset-password?token={}", rawToken);
+                log.info("[SOODFOLIO] RESET LINK: {}", resetLink);
                 log.info("=======================================================================");
             }
         }

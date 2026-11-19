@@ -1,5 +1,7 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
   servlet:
     context-path: /api/v1
 
@@ -9,13 +11,20 @@ spring:
   config:
     import: optional:file:.env[.properties]
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:soodfolio_db}
+    url: ${DB_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:soodfolio_db}}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   sql:
     init:
-      mode: ${SQL_INIT_MODE:always}
+      mode: never
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    url: ${FLYWAY_DB_URL:${spring.datasource.url}}
+    user: ${FLYWAY_DB_USERNAME:${spring.datasource.username}}
+    password: ${FLYWAY_DB_PASSWORD:${spring.datasource.password}}
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:true}
+    baseline-version: 1
   jpa:
     hibernate:
       ddl-auto: validate
@@ -31,12 +40,38 @@ spring:
       max-file-size: 15MB
       max-request-size: 20MB
 
-# JWT, CORS & OAuth2 Configuration
+# Actuator Healthcheck
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+# JWT, Storage, Mail, CORS & OAuth2 Configuration
 app:
-  cloudinary:
-    url: ${CLOUDINARY_URL:}
+  storage:
+    provider: ${STORAGE_PROVIDER:local} # local | cloudinary
+    cloudinary:
+      cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+      api-key: ${CLOUDINARY_API_KEY:}
+      api-secret: ${CLOUDINARY_API_SECRET:}
+      base-url: ${CLOUDINARY_BASE_URL:https://api.cloudinary.com}
+      folder-prefix: ${CLOUDINARY_FOLDER_PREFIX:soodfolio}
+      url: ${CLOUDINARY_URL:}
   upload:
     dir: uploads
+  mail:
+    provider: ${MAIL_PROVIDER:noop} # noop | brevo
+    brevo:
+      api-key: ${BREVO_API_KEY:}
+      base-url: ${BREVO_BASE_URL:https://api.brevo.com}
+    sender-email: ${MAIL_SENDER_EMAIL:}
+    sender-name: ${MAIL_SENDER_NAME:SoodFolio}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
   cookie:
@@ -57,6 +92,8 @@ app:
     log-reset-link: ${AUTH_LOG_RESET_LINK:false}
   seed:
     enabled: ${APP_SEED_ENABLED:false}
+  rate-limit:
+    public-enabled: ${APP_RATE_LIMIT_PUBLIC_ENABLED:true}
   gemini:
     api-key: ${GEMINI_API_KEY:}
     model: ${GEMINI_MODEL:gemini-3.5-flash-lite}

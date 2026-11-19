@@ -2,8 +2,10 @@ package com.soodfolio.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -12,6 +14,8 @@ public class SnapshotDtos {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CreateSnapshotRequest {
         @Size(max = 255, message = "Changelog must not exceed 255 characters")
         @Schema(description = "Description of changes in this version", example = "Updated work experience and added SoodFolio project")
@@ -20,6 +24,8 @@ public class SnapshotDtos {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class SnapshotResponseDto {
         private UUID id;
         private UUID portfolioId;
@@ -31,6 +37,8 @@ public class SnapshotDtos {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class SnapshotSummaryDto {
         private UUID id;
         private int version;
@@ -40,6 +48,8 @@ public class SnapshotDtos {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class RollbackResponseDto {
         private String message;
         private int restoredVersion;

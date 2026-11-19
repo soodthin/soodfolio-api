@@ -1,9 +1,11 @@
 target/
-.git
+.git/
 .gitignore
-.idea
+.github/
+.idea/
 *.iml
-.vscode
+.vscode/
 docs/
 uploads/
-
+*.md
+.env*

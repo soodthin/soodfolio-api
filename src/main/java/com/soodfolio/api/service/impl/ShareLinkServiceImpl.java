@@ -214,9 +214,11 @@ public class ShareLinkServiceImpl implements ShareLinkService {
             throw new ShareLinkExpiredException("Link ứng tuyển đã đạt giới hạn lượt xem tối đa.");
         }
 
-        // Increment view count safely
-        link.setViewCount(link.getViewCount() + 1);
-        shareLinkRepository.save(link);
+        // Increment view count atomically
+        int updated = shareLinkRepository.incrementViewCountIfAllowed(link.getId(), now);
+        if (updated == 0) {
+            throw new ShareLinkExpiredException("Link ứng tuyển đã hết hạn hoặc đạt giới hạn lượt xem tối đa.");
+        }
 
         PortfolioResponseDto dto = deserializeSnapshot(link.getSnapshot().getSnapshotData());
 
@@ -242,8 +244,8 @@ public class ShareLinkServiceImpl implements ShareLinkService {
         ShareLink link = shareLinkRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new ResourceNotFoundException("ShareLink", "token", "invalid"));
 
-        if (link.isRevoked()) {
-            log.warn("Attempt to record telemetry on revoked share link {}", link.getId());
+        if (link.isRevoked() || (link.getExpiresAt() != null && link.getExpiresAt().isBefore(LocalDateTime.now()))) {
+            log.warn("Attempt to record telemetry on revoked or expired share link {}", link.getId());
             return;
         }
 
@@ -251,15 +253,23 @@ public class ShareLinkServiceImpl implements ShareLinkService {
             return;
         }
 
+        Set<String> allowedDevices = Set.of("DESKTOP", "TABLET", "MOBILE");
+
         List<ShareLinkTelemetry> telemetries = request.getEvents().stream()
-                .map(event -> ShareLinkTelemetry.builder()
-                        .shareLink(link)
-                        .sessionId(request.getSessionId())
-                        .slideKey(event.getSlideKey())
-                        .dwellSeconds(Math.max(0, event.getDwellSeconds()))
-                        .deviceType(event.getDeviceType() != null ? event.getDeviceType().toUpperCase() : "DESKTOP")
-                        .userAgent(event.getUserAgent() != null ? event.getUserAgent() : userAgent)
-                        .build())
+                .map(event -> {
+                    int clampedDwellSeconds = Math.min(3600, Math.max(0, event.getDwellSeconds()));
+                    String rawDevice = event.getDeviceType() != null ? event.getDeviceType().trim().toUpperCase() : "UNKNOWN";
+                    String deviceType = allowedDevices.contains(rawDevice) ? rawDevice : "UNKNOWN";
+
+                    return ShareLinkTelemetry.builder()
+                            .shareLink(link)
+                            .sessionId(request.getSessionId())
+                            .slideKey(event.getSlideKey())
+                            .dwellSeconds(clampedDwellSeconds)
+                            .deviceType(deviceType)
+                            .userAgent(event.getUserAgent() != null ? event.getUserAgent() : userAgent)
+                            .build();
+                })
                 .toList();
 
         telemetryRepository.saveAll(telemetries);

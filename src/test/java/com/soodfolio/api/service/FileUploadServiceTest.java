@@ -348,16 +348,76 @@ class FileUploadServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw BadRequestException when magic bytes do not match declared extension")
-    void shouldRejectMismatchedMagicBytes() {
+    @DisplayName("Should throw BadRequestException when HTML/JS script is disguised as evil.jpg")
+    void shouldRejectHtmlScriptDisguisedAsEvilJpg() {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
-                "fake.jpg",
+                "evil.jpg",
                 "image/jpeg",
-                "NOT_A_JPEG".getBytes()
+                "<html><script>alert(1)</script></html>".getBytes()
         );
 
         assertThatThrownBy(() -> fileUploadService.uploadImage(file))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Magic Bytes");
+    }
+
+    @Test
+    @DisplayName("Should throw BadRequestException when shell script is disguised as fake.pdf")
+    void shouldRejectShellScriptDisguisedAsFakePdf() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "fake.pdf",
+                "application/pdf",
+                "#!/bin/sh echo pwned".getBytes()
+        );
+
+        assertThatThrownBy(() -> fileUploadService.uploadResume(file))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Magic Bytes");
+    }
+
+    @Test
+    @DisplayName("Should throw BadRequestException when mismatch.png has PDF magic bytes")
+    void shouldRejectMismatchPngWithPdfMagicBytes() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "mismatch.png",
+                "image/png",
+                REAL_PDF_BYTES
+        );
+
+        assertThatThrownBy(() -> fileUploadService.uploadImage(file))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Magic Bytes");
+    }
+
+    @Test
+    @DisplayName("Should delegate to custom FileStorageProvider and return Cloudinary secure_url")
+    void shouldDelegateStorageToCustomProvider() {
+        com.soodfolio.api.service.storage.FileStorageProvider mockProvider = org.mockito.Mockito.mock(
+                com.soodfolio.api.service.storage.FileStorageProvider.class
+        );
+        String expectedCloudinaryUrl = "https://res.cloudinary.com/demo/image/upload/v1234/soodfolio/images/avatar.jpg";
+        org.mockito.Mockito.when(mockProvider.store(
+                org.mockito.ArgumentMatchers.any(byte[].class),
+                org.mockito.ArgumentMatchers.eq("images"),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("image/jpeg"),
+                org.mockito.ArgumentMatchers.eq(true)
+        )).thenReturn(expectedCloudinaryUrl);
+
+        FileUploadServiceImpl serviceWithMockProvider = new FileUploadServiceImpl(mockProvider);
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "avatar.jpg",
+                "image/jpeg",
+                REAL_JPEG_BYTES
+        );
+
+        UploadResponseDto response = serviceWithMockProvider.uploadImage(file);
+
+        assertThat(response.getUrl()).isEqualTo(expectedCloudinaryUrl);
     }
 }

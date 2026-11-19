@@ -1,6 +1,7 @@
 -- ===================================================
 -- SoodFolio Database Schema (PostgreSQL)
 -- Architecture: Hybrid Relational + JSONB, Soft Delete, UUID PK
+-- Flyway Initial Baseline Migration V1
 -- ===================================================
 
 -- 1. Bảng USERS (Tài khoản người dùng)
@@ -151,7 +152,6 @@ CREATE INDEX IF NOT EXISTS idx_educations_portfolio ON educations(portfolio_id, 
 CREATE INDEX IF NOT EXISTS idx_social_links_portfolio ON social_links(portfolio_id, order_index) WHERE is_deleted = FALSE;
 CREATE INDEX IF NOT EXISTS idx_analytics_portfolio ON analytics_views(portfolio_id, created_at);
 
-
 -- 9. Bảng REFRESH_TOKENS (Lưu phiên đăng nhập đa thiết bị)
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -164,7 +164,6 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
-
 
 -- 10. Bang PASSWORD_RESET_TOKENS (Luu token khoi phuc mat khau)
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -179,7 +178,6 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
 
-
 -- 11. Bảng PORTFOLIO_SNAPSHOTS (Lưu snapshot nội dung portfolio bất biến)
 CREATE TABLE IF NOT EXISTS portfolio_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -192,7 +190,6 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_portfolio_id ON portfolio_snapshots(portfolio_id);
-
 
 -- 12. Bảng SHARE_LINKS (Quản lý link ứng tuyển riêng theo công ty)
 CREATE TABLE IF NOT EXISTS share_links (
@@ -215,7 +212,6 @@ CREATE TABLE IF NOT EXISTS share_links (
 CREATE INDEX IF NOT EXISTS idx_share_links_token_hash ON share_links(token_hash);
 CREATE INDEX IF NOT EXISTS idx_share_links_portfolio_id ON share_links(portfolio_id);
 
-
 -- 13. Bảng SHARE_LINK_TELEMETRY (Lưu sự kiện đo thời gian xem slide theo link)
 CREATE TABLE IF NOT EXISTS share_link_telemetry (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -229,5 +225,3 @@ CREATE TABLE IF NOT EXISTS share_link_telemetry (
 );
 
 CREATE INDEX IF NOT EXISTS idx_telemetry_share_link ON share_link_telemetry(share_link_id);
-
-

@@ -1,5 +1,6 @@
 package com.soodfolio.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
@@ -13,6 +14,9 @@ import java.util.UUID;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class PortfolioResponseDto {
     private UUID id;
     private String username;
@@ -44,6 +48,7 @@ public class PortfolioResponseDto {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class SocialLinkDto {
         private String platform;
 
@@ -55,6 +60,9 @@ public class PortfolioResponseDto {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ExperienceDto {
         private UUID id;
         private String roleTitle;
@@ -70,6 +78,9 @@ public class PortfolioResponseDto {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ProjectDto {
         private UUID id;
         private String title;
@@ -87,6 +98,9 @@ public class PortfolioResponseDto {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class SkillDto {
         private UUID id;
         private String category;
@@ -96,6 +110,9 @@ public class PortfolioResponseDto {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class EducationDto {
         private UUID id;
         private String institution;

@@ -23,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -144,5 +145,32 @@ class PublicDeckControllerTest {
                 .andExpect(jsonPath("$.status").value("ok"));
 
         verify(shareLinkService).recordTelemetry(eq(token), any(TelemetryBatchRequest.class), eq("Mozilla/5.0"));
+    }
+
+    @Test
+    @DisplayName("POST /public/links/{token}/telemetry - 400 Bad Request when batch exceeds 50 events")
+    void shouldReturn400WhenTelemetryBatchExceeds50Events() throws Exception {
+        String token = "st_live_Shopee123";
+
+        List<TelemetryEventDto> events = new ArrayList<>();
+        for (int i = 0; i < 51; i++) {
+            events.add(TelemetryEventDto.builder()
+                    .slideKey("slide-" + i)
+                    .dwellSeconds(5)
+                    .build());
+        }
+
+        TelemetryBatchRequest request = TelemetryBatchRequest.builder()
+                .sessionId("sess_too_many")
+                .events(events)
+                .build();
+
+        mockMvc.perform(post("/public/links/" + token + "/telemetry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.validationErrors.events").value("Maximum 50 telemetry events allowed per batch"));
+
+        verify(shareLinkService, never()).recordTelemetry(any(), any(), any());
     }
 }

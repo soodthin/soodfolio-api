@@ -6,11 +6,19 @@
 spring:
   datasource:
     password: test_db_password
+  flyway:
+    enabled: false
 
 app:
   jwt:
     secret: dGVzdC1qd3Qtc2VjcmV0LWZvci11bml0LXRlc3RzLW11c3QtYmUtYXQtbGVhc3QtMjU2LWJpdHMtZXh0cmEtbG9uZw== # gitleaks:allow
     expiration-ms: 900000
+  storage:
+    provider: local
+  mail:
+    provider: noop
+  frontend:
+    base-url: http://localhost:3000
   cors:
     allowed-origins: http://localhost:3000,http://localhost:3001
   oauth2:
@@ -26,3 +34,5 @@ app:
     log-reset-link: false
   seed:
     enabled: false
+  rate-limit:
+    public-enabled: true

@@ -141,7 +141,8 @@ public class FileUploadServiceImpl implements FileUploadService {
         // Anti-Path Traversal & Collision: Random UUID naming
         String newFileName = UUID.randomUUID() + extension;
 
-        String fileUrl = fileStorageProvider.store(bytes, newFileName, contentType, subDirName);
+        boolean isImage = !"resumes".equalsIgnoreCase(subDirName) && !"application/pdf".equalsIgnoreCase(contentType);
+        String fileUrl = fileStorageProvider.store(bytes, subDirName, newFileName, contentType, isImage);
 
         log.info("File uploaded successfully: {} -> {}", originalFileName, fileUrl);
 
@@ -178,8 +179,9 @@ public class FileUploadServiceImpl implements FileUploadService {
                     header[5] == 0x0A &&
                     header[6] == 0x1A &&
                     header[7] == 0x0A);
-            case ".gif" -> (bytesRead >= 4 &&
-                    header[0] == 'G' && header[1] == 'I' && header[2] == 'F' && header[3] == '8');
+            case ".gif" -> (bytesRead >= 6 &&
+                    header[0] == 'G' && header[1] == 'I' && header[2] == 'F' && header[3] == '8' &&
+                    (header[4] == '7' || header[4] == '9') && header[5] == 'a');
             case ".webp" -> (bytesRead >= 12 &&
                     header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F' &&
                     header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P');

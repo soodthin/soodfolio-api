@@ -9,7 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface PortfolioRepository extends JpaRepository<Portfolio, UUID>, PortfolioRepositoryCustom {
+public interface PortfolioRepository extends JpaRepository<Portfolio, UUID> {
 
     @EntityGraph(attributePaths = {"user"})
     Optional<Portfolio> findByUsername(String username);

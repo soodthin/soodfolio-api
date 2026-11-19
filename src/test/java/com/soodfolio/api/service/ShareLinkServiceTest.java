@@ -307,6 +307,8 @@ class ShareLinkServiceTest {
                 .build();
 
         when(shareLinkRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(validLink));
+        when(shareLinkRepository.incrementViewCountIfAllowed(eq(validLink.getId()), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(objectMapper.readValue(sampleSnapshot.getSnapshotData(), PortfolioResponseDto.class))
                 .thenReturn(samplePortfolioDto);
 
@@ -318,9 +320,8 @@ class ShareLinkServiceTest {
         assertThat(response.getSnapshotVersion()).isEqualTo(1);
         assertThat(response.getPortfolio()).isEqualTo(samplePortfolioDto);
 
-        // View count incremented from 3 to 4
-        assertThat(validLink.getViewCount()).isEqualTo(4);
-        verify(shareLinkRepository).save(validLink);
+        verify(shareLinkRepository).incrementViewCountIfAllowed(eq(validLink.getId()), any(LocalDateTime.class));
+        verify(shareLinkRepository, never()).save(validLink);
     }
 
     @Test
@@ -344,6 +345,31 @@ class ShareLinkServiceTest {
                     assertThat(fe.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
                     assertThat(fe.getMessage()).contains("thu hồi");
                 });
+
+        verify(shareLinkRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should throw ShareLinkExpiredException (410 Gone) when incrementViewCountIfAllowed returns 0 due to concurrency slot loss")
+    void shouldThrowExpiredWhenConcurrentSlotLost() {
+        String rawToken = "st_live_SlotLossToken";
+        String tokenHash = computeSha256(rawToken);
+
+        ShareLink link = ShareLink.builder()
+                .id(UUID.randomUUID())
+                .tokenHash(tokenHash)
+                .isRevoked(false)
+                .viewCount(9)
+                .maxViews(10)
+                .build();
+
+        when(shareLinkRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(link));
+        when(shareLinkRepository.incrementViewCountIfAllowed(eq(link.getId()), any(LocalDateTime.class)))
+                .thenReturn(0);
+
+        assertThatThrownBy(() -> shareLinkService.getPublicDeck(rawToken))
+                .isInstanceOf(ShareLinkExpiredException.class)
+                .hasMessageContaining("hết hạn hoặc đạt giới hạn lượt xem");
 
         verify(shareLinkRepository, never()).save(any());
     }
@@ -433,6 +459,8 @@ class ShareLinkServiceTest {
                 .build();
 
         when(shareLinkRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(filteredLink));
+        when(shareLinkRepository.incrementViewCountIfAllowed(eq(filteredLink.getId()), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(objectMapper.readValue(sampleSnapshot.getSnapshotData(), PortfolioResponseDto.class))
                 .thenReturn(samplePortfolioDto);
 
@@ -470,6 +498,8 @@ class ShareLinkServiceTest {
                 .build();
 
         when(shareLinkRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(filteredLink));
+        when(shareLinkRepository.incrementViewCountIfAllowed(eq(filteredLink.getId()), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(objectMapper.readValue(sampleSnapshot.getSnapshotData(), PortfolioResponseDto.class))
                 .thenReturn(samplePortfolioDto);
 
@@ -564,6 +594,76 @@ class ShareLinkServiceTest {
         shareLinkService.recordTelemetry(rawToken, request, "UA");
 
         verify(telemetryRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("Should ignore telemetry recording when share link is expired")
+    void shouldIgnoreTelemetryWhenLinkIsExpired() {
+        String rawToken = "st_live_ExpiredTeleToken";
+        String tokenHash = computeSha256(rawToken);
+
+        ShareLink expiredLink = ShareLink.builder()
+                .id(UUID.randomUUID())
+                .tokenHash(tokenHash)
+                .isRevoked(false)
+                .expiresAt(LocalDateTime.now().minusHours(1))
+                .build();
+
+        when(shareLinkRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(expiredLink));
+
+        TelemetryBatchRequest request = TelemetryBatchRequest.builder()
+                .sessionId("sess_123")
+                .events(List.of(TelemetryEventDto.builder().slideKey("hero").dwellSeconds(10).build()))
+                .build();
+
+        shareLinkService.recordTelemetry(rawToken, request, "Agent");
+
+        verify(telemetryRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("Should clamp dwellSeconds to [0, 3600] and normalize unknown deviceType to UNKNOWN")
+    void shouldClampDwellSecondsAndNormalizeDeviceType() {
+        String rawToken = "st_live_NormalizeTeleToken";
+        String tokenHash = computeSha256(rawToken);
+
+        ShareLink link = ShareLink.builder()
+                .id(UUID.randomUUID())
+                .tokenHash(tokenHash)
+                .isRevoked(false)
+                .build();
+
+        when(shareLinkRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(link));
+
+        TelemetryBatchRequest request = TelemetryBatchRequest.builder()
+                .sessionId("sess_clamp")
+                .events(List.of(
+                        TelemetryEventDto.builder()
+                                .slideKey("slide-huge")
+                                .dwellSeconds(999999) // Exceeds 3600
+                                .deviceType("SMART_FRIDGE") // Invalid device
+                                .build(),
+                        TelemetryEventDto.builder()
+                                .slideKey("slide-negative")
+                                .dwellSeconds(-500) // Negative
+                                .deviceType("TABLET") // Valid tablet
+                                .build()
+                ))
+                .build();
+
+        shareLinkService.recordTelemetry(rawToken, request, "UserAgent");
+
+        ArgumentCaptor<List<ShareLinkTelemetry>> captor = ArgumentCaptor.forClass(List.class);
+        verify(telemetryRepository).saveAll(captor.capture());
+
+        List<ShareLinkTelemetry> saved = captor.getValue();
+        assertThat(saved).hasSize(2);
+
+        assertThat(saved.get(0).getDwellSeconds()).isEqualTo(3600);
+        assertThat(saved.get(0).getDeviceType()).isEqualTo("UNKNOWN");
+
+        assertThat(saved.get(1).getDwellSeconds()).isEqualTo(0);
+        assertThat(saved.get(1).getDeviceType()).isEqualTo("TABLET");
     }
 
     @Test

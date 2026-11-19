@@ -92,6 +92,7 @@ public class ShareLinkDtos {
         private String sessionId;
 
         @NotEmpty(message = "Events list cannot be empty")
+        @Size(max = 50, message = "Maximum 50 telemetry events allowed per batch")
         @Valid
         private List<TelemetryEventDto> events;
     }

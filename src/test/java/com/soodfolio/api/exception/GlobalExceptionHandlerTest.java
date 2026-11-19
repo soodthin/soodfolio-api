@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -73,6 +74,44 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getStatus()).isEqualTo(409);
         assertThat(response.getBody().getMessage()).isEqualTo(conflictMessage);
+    }
+
+    @Test
+    @DisplayName("Should return 409 Conflict when DataIntegrityViolationException is handled")
+    void shouldReturn409ConflictWhenDataIntegrityViolationExceptionHandled() {
+        String conflictMessage = "Dữ liệu đã bị thay đổi bởi một phiên khác. Vui lòng tải lại trang và thử lại.";
+        when(i18nService.getMessage("common.concurrency_conflict")).thenReturn(conflictMessage);
+
+        DataIntegrityViolationException ex =
+                new DataIntegrityViolationException("Duplicate key violation on snapshot_version");
+
+        ResponseEntity<ErrorResponseDto> response = globalExceptionHandler.handleOptimisticLockingFailure(ex, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo(409);
+        assertThat(response.getBody().getError()).isEqualTo("Conflict");
+        assertThat(response.getBody().getMessage()).isEqualTo(conflictMessage);
+        assertThat(response.getBody().getPath()).isEqualTo("/api/v1/portfolios/me");
+    }
+
+    @Test
+    @DisplayName("Should return 429 Too Many Requests when RateLimitExceededException is handled")
+    void shouldReturn429TooManyRequestsWhenRateLimitExceededExceptionHandled() {
+        String rateLimitMsg = "Quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.";
+        when(i18nService.getMessage("rate_limit_exceeded")).thenReturn(rateLimitMsg);
+
+        RateLimitExceededException ex = new RateLimitExceededException("rate_limit_exceeded");
+
+        ResponseEntity<ErrorResponseDto> response = globalExceptionHandler.handleBaseApiException(ex, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo(429);
+        assertThat(response.getBody().getError()).isEqualTo("Too Many Requests");
+        assertThat(response.getBody().getMessage()).isEqualTo(rateLimitMsg);
     }
 
     @Test

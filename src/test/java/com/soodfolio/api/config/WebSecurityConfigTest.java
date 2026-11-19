@@ -117,4 +117,22 @@ class WebSecurityConfigTest {
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
+
+    @Test
+    @DisplayName("GET /actuator/health is permitted anonymously without JWT token")
+    void shouldPermitActuatorHealthWithoutToken() throws Exception {
+        // Must not be rejected with 401 Unauthorized
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().is(org.hamcrest.Matchers.not(401)));
+    }
+
+    @Test
+    @DisplayName("GET /actuator/env and /actuator/beans must be rejected with 401 Unauthorized")
+    void shouldRejectSensitiveActuatorEndpointsWithoutToken() throws Exception {
+        mockMvc.perform(get("/actuator/env"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/actuator/beans"))
+                .andExpect(status().isUnauthorized());
+    }
 }

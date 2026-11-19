@@ -1,0 +1,28 @@
+# ==============================================================================
+# SoodFolio Backend - Production Profile (Neon PostgreSQL, Cloudinary, Brevo)
+# Activated via SPRING_PROFILES_ACTIVE=prod
+# ==============================================================================
+
+spring:
+  jpa:
+    show-sql: false
+    open-in-view: false
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 0
+      idle-timeout: 180000     # 3 minutes (Neon scale-to-zero friendly)
+      max-lifetime: 600000     # 10 minutes
+      connection-timeout: 20000 # 20 seconds (tolerate Neon cold wake-up)
+
+app:
+  storage:
+    provider: ${STORAGE_PROVIDER:cloudinary}
+  mail:
+    provider: ${MAIL_PROVIDER:brevo}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

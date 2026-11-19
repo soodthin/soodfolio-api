@@ -68,6 +68,9 @@ class AuthServiceTest {
     @Mock
     private JwtTokenProvider tokenProvider;
 
+    @Mock
+    private EmailService emailService;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -248,8 +251,9 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Should generate password reset token when user exists")
+    @DisplayName("Should generate password reset token and dispatch email when user exists")
     void shouldHandleForgotPasswordForExistingUser() {
+        ReflectionTestUtils.setField(authService, "frontendBaseUrl", "http://localhost:3000");
         AuthDtos.ForgotPasswordRequest request = new AuthDtos.ForgotPasswordRequest("creator@soodfolio.dev");
 
         when(userRepository.findByEmail("creator@soodfolio.dev")).thenReturn(Optional.of(user));
@@ -257,6 +261,7 @@ class AuthServiceTest {
         AuthDtos.MessageResponse response = authService.forgotPassword(request);
 
         assertThat(response).isNotNull();
+        assertThat(response.getMessage()).isEqualTo("Nếu email tồn tại trong hệ thống, link khôi phục mật khẩu đã được tạo thành công.");
         verify(passwordResetTokenRepository).deleteByUser(user);
         ArgumentCaptor<PasswordResetToken> tokenCaptor = ArgumentCaptor.forClass(PasswordResetToken.class);
         verify(passwordResetTokenRepository).save(tokenCaptor.capture());
@@ -264,10 +269,17 @@ class AuthServiceTest {
         assertThat(savedToken.getToken()).hasSize(64); // SHA-256 hex string length
         assertThat(savedToken.getUser()).isEqualTo(user);
         assertThat(savedToken.isUsed()).isFalse();
+
+        // Verify email dispatched with reset link starting with FRONTEND_BASE_URL
+        verify(emailService).sendPasswordResetEmail(
+                eq(user.getEmail()),
+                eq(user.getFullName()),
+                argThat(link -> link.startsWith("http://localhost:3000/reset-password?token="))
+        );
     }
 
     @Test
-    @DisplayName("Should return generic success message when user does not exist on forgot password")
+    @DisplayName("Should return generic success message and not dispatch email when user does not exist (anti-enumeration)")
     void shouldHandleForgotPasswordSilentlyForNonExistingUser() {
         AuthDtos.ForgotPasswordRequest request = new AuthDtos.ForgotPasswordRequest("nonexistent@soodfolio.dev");
 
@@ -276,7 +288,9 @@ class AuthServiceTest {
         AuthDtos.MessageResponse response = authService.forgotPassword(request);
 
         assertThat(response).isNotNull();
+        assertThat(response.getMessage()).isEqualTo("Nếu email tồn tại trong hệ thống, link khôi phục mật khẩu đã được tạo thành công.");
         verify(passwordResetTokenRepository, never()).save(any());
+        verify(emailService, never()).sendPasswordResetEmail(any(), any(), any());
     }
 
     @Test
