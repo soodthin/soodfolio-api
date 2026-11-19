@@ -47,10 +47,10 @@ app:
   oauth2:
     sandbox-enabled: ${APP_OAUTH2_SANDBOX_ENABLED:false}
     github:
-      client-id: ${GITHUB_CLIENT_ID:Ov23li3aBSxR9V3u8J2O}
+      client-id: ${GITHUB_CLIENT_ID:}
       client-secret: ${GITHUB_CLIENT_SECRET:}
     google:
-      client-id: ${GOOGLE_CLIENT_ID:622903719114-lilk7gbj5jcc138eva810gvr7uva3fqe.apps.googleusercontent.com}
+      client-id: ${GOOGLE_CLIENT_ID:}
       client-secret: ${GOOGLE_CLIENT_SECRET:}
   gemini:
     api-key: ${GEMINI_API_KEY:}
