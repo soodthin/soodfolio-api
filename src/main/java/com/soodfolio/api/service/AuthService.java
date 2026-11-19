@@ -16,5 +16,6 @@ public interface AuthService {
 
     // OAuth 2.0 Social Login & Sandbox
     AuthDtos.AuthResponse processOAuthSandbox(AuthDtos.OAuthSandboxRequest request);
+    AuthDtos.AuthResponse processOAuthLogin(AuthDtos.OAuthLoginRequest request);
     AuthDtos.AuthResponse exchangeOAuthCode(AuthDtos.OAuthExchangeRequest request);
 }

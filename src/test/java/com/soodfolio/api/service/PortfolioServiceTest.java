@@ -204,29 +204,20 @@ class PortfolioServiceTest {
     }
 
     @Test
-    @DisplayName("DRAFT visibility: Should throw ResourceNotFoundException when anonymous guest accesses draft portfolio")
-    void shouldThrowNotFoundWhenAnonymousGuestAccessesDraftPortfolio() {
+    @DisplayName("DRAFT visibility: Should return empty Optional when anonymous or non-owner accesses draft portfolio via getPortfolioByUsername")
+    void shouldReturnEmptyWhenAccessingDraftPortfolioByUsername() {
         portfolio.setPublished(false);
         when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
 
-        // 1. Explicit null viewer passed
-        assertThatThrownBy(() -> portfolioService.getPortfolioByUsername("alex", null))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Portfolio not found with username: 'alex'");
+        // 1. getPortfolioByUsername(username) returns Optional.empty()
+        Optional<PortfolioResponseDto> result = portfolioService.getPortfolioByUsername("alex");
+        assertThat(result).isEmpty();
 
-        // 2. No authentication in SecurityContext
-        SecurityContextHolder.clearContext();
-        assertThatThrownBy(() -> portfolioService.getPortfolioByUsername("alex"))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Portfolio not found with username: 'alex'");
-    }
+        // 2. getPortfolioByUsername(username, null) returns Optional.empty()
+        Optional<PortfolioResponseDto> nullViewerResult = portfolioService.getPortfolioByUsername("alex", null);
+        assertThat(nullViewerResult).isEmpty();
 
-    @Test
-    @DisplayName("DRAFT visibility: Should throw ResourceNotFoundException when another user (non-owner) accesses draft portfolio")
-    void shouldThrowNotFoundWhenOtherUserAccessesDraftPortfolio() {
-        portfolio.setPublished(false);
-        when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
-
+        // 3. getPortfolioByUsername with non-owner returns Optional.empty()
         UserPrincipal otherViewer = new UserPrincipal(
                 UUID.randomUUID(),
                 "intruder@soodfolio.dev",
@@ -234,26 +225,28 @@ class PortfolioServiceTest {
                 "Intruder",
                 AuthorityUtils.createAuthorityList("ROLE_USER")
         );
-
-        // 1. Direct viewer parameter
-        assertThatThrownBy(() -> portfolioService.getPortfolioByUsername("alex", otherViewer))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Portfolio not found with username: 'alex'");
-
-        // 2. Via SecurityContextHolder
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(otherViewer, null, otherViewer.getAuthorities())
-        );
-        assertThatThrownBy(() -> portfolioService.getPortfolioByUsername("alex"))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Portfolio not found with username: 'alex'");
+        Optional<PortfolioResponseDto> otherViewerResult = portfolioService.getPortfolioByUsername("alex", otherViewer);
+        assertThat(otherViewerResult).isEmpty();
     }
 
     @Test
-    @DisplayName("DRAFT visibility: Should return portfolio when owner accesses draft portfolio")
+    @DisplayName("PUBLISHED visibility: Should return DTO when accessing published portfolio via getPortfolioByUsername")
+    void shouldReturnDtoWhenAccessingPublishedPortfolioByUsername() {
+        portfolio.setPublished(true);
+        when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
+
+        Optional<PortfolioResponseDto> result = portfolioService.getPortfolioByUsername("alex");
+        assertThat(result).isPresent();
+        assertThat(result.get().getUsername()).isEqualTo("alex");
+        assertThat(result.get().isPublished()).isTrue();
+    }
+
+    @Test
+    @DisplayName("DRAFT visibility: Should return portfolio when owner accesses draft portfolio via getPortfolioByUsername with viewer or via getPortfolioByUserId")
     void shouldReturnPortfolioWhenOwnerAccessesDraftPortfolio() {
         portfolio.setPublished(false);
         when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
 
         UserPrincipal ownerViewer = new UserPrincipal(
                 userId,
@@ -263,20 +256,17 @@ class PortfolioServiceTest {
                 AuthorityUtils.createAuthorityList("ROLE_USER")
         );
 
-        // 1. Direct viewer parameter
+        // 1. Owner accesses via getPortfolioByUsername(username, ownerViewer)
         Optional<PortfolioResponseDto> directResult = portfolioService.getPortfolioByUsername("alex", ownerViewer);
         assertThat(directResult).isPresent();
         assertThat(directResult.get().getUsername()).isEqualTo("alex");
         assertThat(directResult.get().isPublished()).isFalse();
 
-        // 2. Via SecurityContextHolder
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(ownerViewer, null, ownerViewer.getAuthorities())
-        );
-        Optional<PortfolioResponseDto> contextResult = portfolioService.getPortfolioByUsername("alex");
-        assertThat(contextResult).isPresent();
-        assertThat(contextResult.get().getUsername()).isEqualTo("alex");
-        assertThat(contextResult.get().isPublished()).isFalse();
+        // 2. Owner accesses via getPortfolioByUserId(userId)
+        Optional<PortfolioResponseDto> userIdResult = portfolioService.getPortfolioByUserId(userId);
+        assertThat(userIdResult).isPresent();
+        assertThat(userIdResult.get().getUsername()).isEqualTo("alex");
+        assertThat(userIdResult.get().isPublished()).isFalse();
     }
 
     @Test

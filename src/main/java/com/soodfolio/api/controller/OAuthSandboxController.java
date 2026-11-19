@@ -39,4 +39,15 @@ public class OAuthSandboxController {
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(response);
     }
+
+    @PostMapping("/callback")
+    @Operation(summary = "OAuth Sandbox Mock Callback", description = "Mock OAuth callback login for development")
+    @ApiResponse(responseCode = "200", description = "Sandbox callback authenticated successfully")
+    public ResponseEntity<AuthDtos.AuthResponse> oauthCallback(@Valid @RequestBody AuthDtos.OAuthLoginRequest request) {
+        AuthDtos.AuthResponse response = authService.processOAuthLogin(request);
+        ResponseCookie refreshCookie = cookieHelper.createRefreshTokenCookie(response.getRefreshToken());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .body(response);
+    }
 }

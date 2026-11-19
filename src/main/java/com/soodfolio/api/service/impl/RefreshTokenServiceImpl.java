@@ -4,6 +4,7 @@ import com.soodfolio.api.entity.RefreshToken;
 import com.soodfolio.api.entity.User;
 import com.soodfolio.api.exception.InvalidTokenException;
 import com.soodfolio.api.repository.RefreshTokenRepository;
+import com.soodfolio.api.security.SecurityUtils;
 import com.soodfolio.api.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,19 +23,29 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     @Transactional
     public RefreshToken createRefreshToken(User user) {
+        String rawToken = UUID.randomUUID().toString() + "-" + UUID.randomUUID().toString();
+        String hashedToken = SecurityUtils.sha256(rawToken);
+
         RefreshToken refreshToken = RefreshToken.builder()
                 .user(user)
-                .token(UUID.randomUUID().toString() + "-" + UUID.randomUUID().toString())
+                .token(hashedToken)
                 .expiryDate(Instant.now().plus(7, ChronoUnit.DAYS))
                 .build();
 
-        return refreshTokenRepository.save(refreshToken);
+        RefreshToken saved = refreshTokenRepository.save(refreshToken);
+        saved.setRawToken(rawToken);
+        return saved;
     }
 
     @Override
     @Transactional
     public RefreshToken verifyExpiration(String tokenString) {
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(tokenString)
+        if (tokenString == null || tokenString.isBlank()) {
+            throw new InvalidTokenException("Refresh token was not found in the system");
+        }
+
+        String hashedToken = SecurityUtils.sha256(tokenString.trim());
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(hashedToken)
                 .orElseThrow(() -> new InvalidTokenException("Refresh token was not found in the system"));
 
         if (refreshToken.isRevoked()) {
@@ -48,13 +59,18 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             throw new InvalidTokenException("Refresh token was expired or revoked. Please sign in again.");
         }
 
+        refreshToken.setRawToken(tokenString.trim());
         return refreshToken;
     }
 
     @Override
     @Transactional
     public void revokeToken(String tokenString) {
-        refreshTokenRepository.findByToken(tokenString).ifPresent(token -> {
+        if (tokenString == null || tokenString.isBlank()) {
+            return;
+        }
+        String hashedToken = SecurityUtils.sha256(tokenString.trim());
+        refreshTokenRepository.findByToken(hashedToken).ifPresent(token -> {
             token.setRevoked(true);
             refreshTokenRepository.save(token);
         });

@@ -1,0 +1,16 @@
+# ==============================================================================
+# Gitleaks Configuration for soodfolio-api
+# Extends default gitleaks rules and allowlists mock secrets in unit test files
+# ==============================================================================
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow mock secrets and dummy keys in unit and integration test fixtures"
+paths = [
+  '''src/test/.*''',
+]
+stopwords = [
+  '''dGVzdC1qd3Qtc2VjcmV0LWZvci11bml0LXRlc3RzLW11c3QtYmUtYXQtbGVhc3QtMjU2LWJpdHMtZXh0cmEtbG9uZw==''',
+]

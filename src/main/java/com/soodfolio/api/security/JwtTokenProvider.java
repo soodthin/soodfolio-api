@@ -3,6 +3,7 @@ package com.soodfolio.api.security;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,7 +21,7 @@ public class JwtTokenProvider {
     @Value("${app.jwt.secret:}")
     private String jwtSecret;
 
-    @Value("${app.jwt.expiration-ms:1800000}")
+    @Value("${app.jwt.expiration-ms:900000}")
     private long jwtExpirationMs;
 
     @PostConstruct
@@ -68,17 +69,25 @@ public class JwtTokenProvider {
     }
 
     public boolean validateToken(String authToken) {
+        if (authToken == null || authToken.isBlank()) {
+            log.error("JWT token string is empty or null");
+            return false;
+        }
         try {
             Jwts.parser().verifyWith((SecretKey) key()).build().parseSignedClaims(authToken);
             return true;
         } catch (MalformedJwtException ex) {
-            log.error("Invalid JWT token");
+            log.error("Invalid JWT token format: {}", ex.getMessage());
         } catch (ExpiredJwtException ex) {
-            log.error("Expired JWT token");
+            log.error("Expired JWT token: {}", ex.getMessage());
         } catch (UnsupportedJwtException ex) {
-            log.error("Unsupported JWT token");
+            log.error("Unsupported JWT token: {}", ex.getMessage());
+        } catch (SignatureException ex) {
+            log.error("Invalid JWT signature / untrusted provider: {}", ex.getMessage());
         } catch (IllegalArgumentException ex) {
-            log.error("JWT claims string is empty.");
+            log.error("JWT claims string is empty: {}", ex.getMessage());
+        } catch (JwtException ex) {
+            log.error("JWT verification failed: {}", ex.getMessage());
         }
         return false;
     }

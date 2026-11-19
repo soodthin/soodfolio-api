@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-
 @Service
 @RequiredArgsConstructor
 public class PortfolioServiceImpl implements PortfolioService {
@@ -35,7 +34,9 @@ public class PortfolioServiceImpl implements PortfolioService {
     @Override
     @Transactional(readOnly = true)
     public Optional<PortfolioResponseDto> getPortfolioByUsername(String username) {
-        return getPortfolioByUsername(username, null);
+        return portfolioRepository.findByUsername(username)
+                .filter(Portfolio::isPublished)
+                .map(this::mapToDto);
     }
 
     @Override
@@ -56,7 +57,7 @@ public class PortfolioServiceImpl implements PortfolioService {
         if (!portfolio.isPublished()) {
             boolean isOwner = viewer != null && portfolio.getUser() != null && viewer.getId().equals(portfolio.getUser().getId());
             if (!isOwner) {
-                throw new ResourceNotFoundException("Portfolio", "username", username);
+                return Optional.empty();
             }
         }
 
@@ -155,7 +156,6 @@ public class PortfolioServiceImpl implements PortfolioService {
     }
 
     private PortfolioResponseDto mapToDto(Portfolio p) {
-
         long views = p.getId() != null ? analyticsViewRepository.countByPortfolioId(p.getId()) : 0;
         String fullName = p.getUser() != null ? p.getUser().getFullName() : null;
         String avatarUrl = p.getUser() != null ? p.getUser().getAvatarUrl() : null;

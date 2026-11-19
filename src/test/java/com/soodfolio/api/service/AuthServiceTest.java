@@ -6,6 +6,7 @@ import com.soodfolio.api.entity.Portfolio;
 import com.soodfolio.api.entity.RefreshToken;
 import com.soodfolio.api.entity.User;
 import com.soodfolio.api.exception.DuplicateResourceException;
+import com.soodfolio.api.exception.ForbiddenException;
 import com.soodfolio.api.exception.InvalidCredentialsException;
 import com.soodfolio.api.repository.PasswordResetTokenRepository;
 import com.soodfolio.api.repository.PortfolioRepository;
@@ -14,10 +15,12 @@ import com.soodfolio.api.repository.UserRepository;
 import com.soodfolio.api.security.JwtTokenProvider;
 import com.soodfolio.api.security.UserPrincipal;
 import com.soodfolio.api.service.impl.AuthServiceImpl;
+import com.soodfolio.api.security.SecurityUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +29,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -93,7 +97,8 @@ class AuthServiceTest {
         refreshToken = RefreshToken.builder()
                 .id(UUID.randomUUID())
                 .user(user)
-                .token("valid-refresh-token-uuid")
+                .token(SecurityUtils.sha256("valid-refresh-token-uuid"))
+                .rawToken("valid-refresh-token-uuid")
                 .expiryDate(Instant.now().plus(7, ChronoUnit.DAYS))
                 .revoked(false)
                 .build();
@@ -126,7 +131,7 @@ class AuthServiceTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getAccessToken()).isEqualTo("mock-access-token");
-        assertThat(response.getRefreshToken()).isEqualTo(refreshToken.getToken());
+        assertThat(response.getRefreshToken()).isEqualTo(refreshToken.getRawToken());
         assertThat(response.getUser().getUsername()).isEqualTo("newuser");
 
         verify(userRepository).save(any(User.class));
@@ -253,7 +258,12 @@ class AuthServiceTest {
 
         assertThat(response).isNotNull();
         verify(passwordResetTokenRepository).deleteByUser(user);
-        verify(passwordResetTokenRepository).save(any(PasswordResetToken.class));
+        ArgumentCaptor<PasswordResetToken> tokenCaptor = ArgumentCaptor.forClass(PasswordResetToken.class);
+        verify(passwordResetTokenRepository).save(tokenCaptor.capture());
+        PasswordResetToken savedToken = tokenCaptor.getValue();
+        assertThat(savedToken.getToken()).hasSize(64); // SHA-256 hex string length
+        assertThat(savedToken.getUser()).isEqualTo(user);
+        assertThat(savedToken.isUsed()).isFalse();
     }
 
     @Test
@@ -272,16 +282,18 @@ class AuthServiceTest {
     @Test
     @DisplayName("Should verify valid password reset token")
     void shouldVerifyValidResetToken() {
+        String rawToken = "valid-hex-token";
+        String hashedToken = SecurityUtils.sha256(rawToken);
         PasswordResetToken resetToken = PasswordResetToken.builder()
-                .token("valid-hex-token")
+                .token(hashedToken)
                 .user(user)
                 .expiryDate(Instant.now().plus(15, ChronoUnit.MINUTES))
                 .used(false)
                 .build();
 
-        when(passwordResetTokenRepository.findByToken("valid-hex-token")).thenReturn(Optional.of(resetToken));
+        when(passwordResetTokenRepository.findByToken(hashedToken)).thenReturn(Optional.of(resetToken));
 
-        AuthDtos.VerifyResetTokenResponse response = authService.verifyResetToken("valid-hex-token");
+        AuthDtos.VerifyResetTokenResponse response = authService.verifyResetToken(rawToken);
 
         assertThat(response.isValid()).isTrue();
         assertThat(response.getEmail()).isEqualTo(user.getEmail());
@@ -290,16 +302,18 @@ class AuthServiceTest {
     @Test
     @DisplayName("Should return valid=false for expired or used password reset token")
     void shouldRejectInvalidResetToken() {
+        String rawToken = "used-hex-token";
+        String hashedToken = SecurityUtils.sha256(rawToken);
         PasswordResetToken usedToken = PasswordResetToken.builder()
-                .token("used-hex-token")
+                .token(hashedToken)
                 .user(user)
                 .expiryDate(Instant.now().plus(15, ChronoUnit.MINUTES))
                 .used(true)
                 .build();
 
-        when(passwordResetTokenRepository.findByToken("used-hex-token")).thenReturn(Optional.of(usedToken));
+        when(passwordResetTokenRepository.findByToken(hashedToken)).thenReturn(Optional.of(usedToken));
 
-        AuthDtos.VerifyResetTokenResponse response = authService.verifyResetToken("used-hex-token");
+        AuthDtos.VerifyResetTokenResponse response = authService.verifyResetToken(rawToken);
 
         assertThat(response.isValid()).isFalse();
     }
@@ -307,16 +321,18 @@ class AuthServiceTest {
     @Test
     @DisplayName("Should reset password and invalidate refresh tokens on valid reset token")
     void shouldResetPasswordSuccessfully() {
+        String rawToken = "active-hex-token";
+        String hashedToken = SecurityUtils.sha256(rawToken);
         PasswordResetToken resetToken = PasswordResetToken.builder()
-                .token("active-hex-token")
+                .token(hashedToken)
                 .user(user)
                 .expiryDate(Instant.now().plus(10, ChronoUnit.MINUTES))
                 .used(false)
                 .build();
 
-        AuthDtos.ResetPasswordRequest request = new AuthDtos.ResetPasswordRequest("active-hex-token", "NewSuperSecret123!");
+        AuthDtos.ResetPasswordRequest request = new AuthDtos.ResetPasswordRequest(rawToken, "NewSuperSecret123!");
 
-        when(passwordResetTokenRepository.findByToken("active-hex-token")).thenReturn(Optional.of(resetToken));
+        when(passwordResetTokenRepository.findByToken(hashedToken)).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("NewSuperSecret123!")).thenReturn("new_hash");
 
         AuthDtos.MessageResponse response = authService.resetPassword(request);
@@ -326,5 +342,98 @@ class AuthServiceTest {
         verify(userRepository).save(user);
         verify(passwordResetTokenRepository).save(resetToken);
         verify(refreshTokenRepository).deleteByUser(user);
+    }
+
+    @Test
+    @DisplayName("Should throw 403 ForbiddenException when sandboxEnabled is false for processOAuthSandbox and processOAuthLogin")
+    void shouldThrowForbiddenWhenSandboxDisabled() {
+        ReflectionTestUtils.setField(authService, "sandboxEnabled", false);
+
+        AuthDtos.OAuthSandboxRequest sandboxReq = new AuthDtos.OAuthSandboxRequest("GITHUB", "dev@test.com", "Dev", "dev", null);
+        assertThatThrownBy(() -> authService.processOAuthSandbox(sandboxReq))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("OAuth sandbox mode is disabled");
+
+        AuthDtos.OAuthLoginRequest loginReq = new AuthDtos.OAuthLoginRequest("GITHUB", "test-code", null);
+        assertThatThrownBy(() -> authService.processOAuthLogin(loginReq))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("OAuth sandbox mode is disabled");
+    }
+
+    @Test
+    @DisplayName("Should allow processOAuthSandbox and processOAuthLogin when sandboxEnabled is true")
+    void shouldAllowOAuthSandboxWhenEnabled() {
+        ReflectionTestUtils.setField(authService, "sandboxEnabled", true);
+
+        when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+        when(portfolioRepository.existsByUsername(anyString())).thenReturn(false);
+        when(tokenProvider.generateAccessToken(any(UserPrincipal.class))).thenReturn("mock-sandbox-token");
+        when(tokenProvider.getExpirationMs()).thenReturn(900000L);
+        when(refreshTokenService.createRefreshToken(any(User.class))).thenReturn(refreshToken);
+
+        AuthDtos.OAuthSandboxRequest sandboxReq = new AuthDtos.OAuthSandboxRequest("GITHUB", "dev@github.test", "Dev", "github_dev", null);
+        AuthDtos.AuthResponse response = authService.processOAuthSandbox(sandboxReq);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getAccessToken()).isEqualTo("mock-sandbox-token");
+        assertThat(response.getRefreshToken()).isEqualTo("valid-refresh-token-uuid");
+    }
+
+    @Test
+    @DisplayName("Should reject OAuth code exchange with prefix-bypass redirectUri")
+    void shouldRejectOAuthCodeExchangeWhenRedirectUriPrefixBypassed() {
+        ReflectionTestUtils.setField(authService, "allowedRedirectUrisConfig", "http://localhost:3000/auth/callback/github,http://localhost:3000/auth/callback/google");
+
+        // 1. Google with malicious domain appending prefix
+        AuthDtos.OAuthExchangeRequest evilGoogle = new AuthDtos.OAuthExchangeRequest(
+                "GOOGLE",
+                "auth-code-123",
+                "http://localhost:3000/auth/callback/google.evil.com",
+                "state-123"
+        );
+        assertThatThrownBy(() -> authService.exchangeOAuthCode(evilGoogle))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("redirect_uri không hợp lệ hoặc không nằm trong danh sách được phép");
+
+        // 2. Google with null redirectUri
+        AuthDtos.OAuthExchangeRequest nullGoogle = new AuthDtos.OAuthExchangeRequest(
+                "GOOGLE",
+                "auth-code-123",
+                null,
+                "state-123"
+        );
+        assertThatThrownBy(() -> authService.exchangeOAuthCode(nullGoogle))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("redirect_uri không hợp lệ hoặc không nằm trong danh sách được phép");
+
+        // 3. GitHub with attacker redirectUri
+        AuthDtos.OAuthExchangeRequest evilGithub = new AuthDtos.OAuthExchangeRequest(
+                "GITHUB",
+                "auth-code-123",
+                "http://localhost:3000/auth/callback/github.attacker.org",
+                "state-123"
+        );
+        assertThatThrownBy(() -> authService.exchangeOAuthCode(evilGithub))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("redirect_uri không nằm trong danh sách được phép");
+    }
+
+    @Test
+    @DisplayName("Should reject OAuth code exchange when client credentials are missing")
+    void shouldRejectOAuthWhenCredentialsMissing() {
+        ReflectionTestUtils.setField(authService, "allowedRedirectUrisConfig", "http://localhost:3000/auth/callback/github,http://localhost:3000/auth/callback/google");
+        ReflectionTestUtils.setField(authService, "githubClientId", "");
+        ReflectionTestUtils.setField(authService, "githubClientSecret", "");
+
+        AuthDtos.OAuthExchangeRequest request = new AuthDtos.OAuthExchangeRequest(
+                "GITHUB",
+                "auth-code-123",
+                "http://localhost:3000/auth/callback/github",
+                "state-123"
+        );
+
+        assertThatThrownBy(() -> authService.exchangeOAuthCode(request))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("GitHub OAuth client credentials are not configured");
     }
 }

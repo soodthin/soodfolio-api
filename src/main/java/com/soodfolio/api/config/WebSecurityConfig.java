@@ -40,7 +40,7 @@ import java.util.List;
 )
 public class WebSecurityConfig {
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000}")
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:3001}")
     private String allowedOrigins;
 
     private final CustomUserDetailsService userDetailsService;
@@ -76,6 +76,7 @@ public class WebSecurityConfig {
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
                 .requestMatchers(
                     "/i18n/**",
                     "/auth/**",
@@ -98,7 +99,7 @@ public class WebSecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
-                .filter(origin -> !origin.isEmpty())
+                .filter(origin -> !origin.isEmpty() && !"*".equals(origin))
                 .toList();
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));

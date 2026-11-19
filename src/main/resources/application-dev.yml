@@ -1,0 +1,13 @@
+# ==============================================================================
+# SoodFolio Backend - Local Development Profile
+# Active when SPRING_PROFILES_ACTIVE=dev or --spring.profiles.active=dev
+# DO NOT COMMIT PRODUCTION SECRETS TO THIS FILE
+# ==============================================================================
+
+app:
+  oauth2:
+    sandbox-enabled: true
+  auth:
+    log-reset-link: true
+  seed:
+    enabled: true

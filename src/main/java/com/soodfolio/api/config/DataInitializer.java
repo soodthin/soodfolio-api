@@ -6,6 +6,7 @@ import com.soodfolio.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Component
+@ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 public class DataInitializer implements CommandLineRunner {
@@ -110,16 +112,16 @@ public class DataInitializer implements CommandLineRunner {
                 .title("THAI DO THINH")
                 .tagline("SOFTWARE ENGINEER · FULL-STACK DEVELOPER")
                 .bio("Final-year Computer Science student at Ho Chi Minh City Open University who has built and deployed several real web products, from database design to frontend and backend. Comfortable with Java, Python, JavaScript, TypeScript, C++, and frameworks like React and Spring Boot. I combine solid fundamental engineering with modern AI-assisted workflows to deliver high quality, reliable software quickly.")
-                .statusText("AVAILABLE FOR DEVELOPER ROLES // READY TO DEPLOY")
+                .statusText("AVAILABLE FOR DEVELOPER ROLES · READY TO DEPLOY")
                 .resumeUrl("#transmit")
                 .themeMode("DARK")
                 .isPublished(true)
                 .build();
 
-        // Social Links
-        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("LINKEDIN").url("https://linkedin.com/in/thinhthai").label("LinkedIn: in/thinhthai").orderIndex(0).build());
-        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("GITHUB").url("https://github.com/soodthin").label("GitHub: soodthin").orderIndex(1).build());
-        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("EMAIL").url("mailto:thinhthai963@gmail.com").label("thinhthai963@gmail.com").orderIndex(2).build());
+        // Social Links (Strict UI Taboos: No brackets like [ GitHub ])
+        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("LINKEDIN").url("https://linkedin.com/in/thinhthai").label("LinkedIn").orderIndex(0).build());
+        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("GITHUB").url("https://github.com/soodthin").label("GitHub").orderIndex(1).build());
+        portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("EMAIL").url("mailto:thinhthai963@gmail.com").label("Email").orderIndex(2).build());
         portfolio.getSocialLinks().add(SocialLink.builder().portfolio(portfolio).platform("PHONE").url("tel:0869922096").label("Tel: 0869922096").orderIndex(3).build());
 
         // Experience: BW Industrial
