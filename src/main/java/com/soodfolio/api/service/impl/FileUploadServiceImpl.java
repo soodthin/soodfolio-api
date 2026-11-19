@@ -4,18 +4,16 @@ import com.soodfolio.api.dto.UploadDtos.UploadResponseDto;
 import com.soodfolio.api.exception.BadRequestException;
 import com.soodfolio.api.service.FileUploadService;
 import com.soodfolio.api.service.I18nService;
+import com.soodfolio.api.service.storage.FileStorageProvider;
+import com.soodfolio.api.service.storage.LocalFileStorageProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.text.MessageFormat;
 import java.util.List;
 import java.util.UUID;
@@ -51,20 +49,28 @@ public class FileUploadServiceImpl implements FileUploadService {
 
     private static final long MAX_RESUME_SIZE = 10 * 1024 * 1024; // 10 MB
 
-    private final Path rootUploadPath;
+    private final FileStorageProvider fileStorageProvider;
     private final I18nService i18nService;
-
-    public FileUploadServiceImpl(@Value("${app.upload.dir:uploads}") String uploadDir) {
-        this(uploadDir, null);
-    }
 
     @Autowired
     public FileUploadServiceImpl(
-            @Value("${app.upload.dir:uploads}") String uploadDir,
+            FileStorageProvider fileStorageProvider,
             @Autowired(required = false) I18nService i18nService
     ) {
-        this.rootUploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.fileStorageProvider = fileStorageProvider;
         this.i18nService = i18nService;
+    }
+
+    public FileUploadServiceImpl(FileStorageProvider fileStorageProvider) {
+        this(fileStorageProvider, null);
+    }
+
+    public FileUploadServiceImpl(String uploadDir) {
+        this(new LocalFileStorageProvider(Paths.get(uploadDir).toAbsolutePath().normalize()), null);
+    }
+
+    public FileUploadServiceImpl(String uploadDir, I18nService i18nService) {
+        this(new LocalFileStorageProvider(Paths.get(uploadDir).toAbsolutePath().normalize()), i18nService);
     }
 
     @Override
@@ -122,37 +128,68 @@ public class FileUploadServiceImpl implements FileUploadService {
             throw new BadRequestException(msg("upload.extension_unsupported", "Phần mở rộng tệp không được hỗ trợ: {0}", extension));
         }
 
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new BadRequestException(msg("upload.storage_error", "Không thể đọc nội dung tệp: {0}", e.getMessage()));
+        }
+
+        // Validate Magic Bytes strictly according to file format and reject SVG
+        validateMagicBytes(bytes, extension, contentType);
+
         // Anti-Path Traversal & Collision: Random UUID naming
         String newFileName = UUID.randomUUID() + extension;
 
-        try {
-            Path targetDir = rootUploadPath.resolve(subDirName).normalize();
-            if (!targetDir.startsWith(rootUploadPath)) {
-                throw new BadRequestException(msg("upload.storage_error", "Đường dẫn lưu trữ không hợp lệ: {0}", "Invalid path"));
-            }
-            Files.createDirectories(targetDir);
+        String fileUrl = fileStorageProvider.store(bytes, newFileName, contentType, subDirName);
 
-            Path targetFile = targetDir.resolve(newFileName).normalize();
-            if (!targetFile.startsWith(targetDir)) {
-                throw new BadRequestException(msg("upload.storage_error", "Đường dẫn tệp không hợp lệ: {0}", "Invalid path"));
-            }
+        log.info("File uploaded successfully: {} -> {}", originalFileName, fileUrl);
 
-            Files.copy(file.getInputStream(), targetFile, StandardCopyOption.REPLACE_EXISTING);
+        return UploadResponseDto.builder()
+                .url(fileUrl)
+                .originalFileName(originalFileName)
+                .fileName(newFileName)
+                .contentType(contentType)
+                .size(file.getSize())
+                .build();
+    }
 
-            String relativeUrl = "/uploads/" + subDirName + "/" + newFileName;
+    private void validateMagicBytes(byte[] bytes, String extension, String contentType) {
+        if (".svg".equalsIgnoreCase(extension) ||
+                (contentType != null && (contentType.equalsIgnoreCase("image/svg+xml") || contentType.toLowerCase().contains("svg")))) {
+            throw new BadRequestException(msg("upload.svg_disallowed", "Tệp SVG không được phép tải lên vì lý do bảo mật."));
+        }
 
-            log.info("File uploaded successfully: {} -> {}", originalFileName, relativeUrl);
+        if (bytes == null || bytes.length < 3) {
+            throw new BadRequestException(msg("upload.magic_bytes_invalid", "Tệp tải lên không hợp lệ hoặc dữ liệu quá ngắn."));
+        }
 
-            return UploadResponseDto.builder()
-                    .url(relativeUrl)
-                    .originalFileName(originalFileName)
-                    .fileName(newFileName)
-                    .contentType(contentType)
-                    .size(file.getSize())
-                    .build();
-        } catch (IOException e) {
-            log.error("Failed to store file: ", e);
-            throw new RuntimeException(msg("upload.storage_error", "Lỗi trong quá trình lưu trữ tệp: {0}", e.getMessage()), e);
+        int bytesRead = bytes.length;
+        byte[] header = bytes;
+
+        boolean isValid = switch (extension.toLowerCase()) {
+            case ".jpg", ".jpeg" -> ((header[0] & 0xFF) == 0xFF && (header[1] & 0xFF) == 0xD8 && (header[2] & 0xFF) == 0xFF);
+            case ".png" -> (bytesRead >= 8 &&
+                    (header[0] & 0xFF) == 0x89 &&
+                    header[1] == 0x50 && // P
+                    header[2] == 0x4E && // N
+                    header[3] == 0x47 && // G
+                    header[4] == 0x0D &&
+                    header[5] == 0x0A &&
+                    header[6] == 0x1A &&
+                    header[7] == 0x0A);
+            case ".gif" -> (bytesRead >= 4 &&
+                    header[0] == 'G' && header[1] == 'I' && header[2] == 'F' && header[3] == '8');
+            case ".webp" -> (bytesRead >= 12 &&
+                    header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F' &&
+                    header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P');
+            case ".pdf" -> (bytesRead >= 5 &&
+                    header[0] == '%' && header[1] == 'P' && header[2] == 'D' && header[3] == 'F' && header[4] == '-');
+            default -> false;
+        };
+
+        if (!isValid) {
+            throw new BadRequestException(msg("upload.magic_bytes_invalid", "Cấu trúc dữ liệu tệp (Magic Bytes) không khớp với định dạng cho phép: {0}", extension));
         }
     }
 

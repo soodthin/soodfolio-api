@@ -31,9 +31,12 @@ build/
 ### VS Code ###
 .vscode/
 
-### macOS ###
+### macOS & OS ###
 .DS_Store
+Thumbs.db
 
 # Local Uploads & Env
 uploads/
 .env*
+!.env.example
+*.log

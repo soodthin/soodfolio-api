@@ -11,6 +11,7 @@ import com.soodfolio.api.exception.BadRequestException;
 import com.soodfolio.api.exception.ResourceNotFoundException;
 import com.soodfolio.api.repository.PortfolioRepository;
 import com.soodfolio.api.repository.PortfolioSnapshotRepository;
+import com.soodfolio.api.repository.UserRepository;
 import com.soodfolio.api.service.impl.SnapshotServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,9 @@ class SnapshotServiceTest {
 
     @Mock
     private PortfolioService portfolioService;
+
+    @Mock
+    private UserRepository userRepository;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -362,6 +366,8 @@ class SnapshotServiceTest {
         // Prepare historical snapshot data to restore
         PortfolioResponseDto historicalDto = PortfolioResponseDto.builder()
                 .id(portfolioId)
+                .fullName("Alex Nguyen Historical")
+                .avatarUrl("https://storage/avatar-v1.png")
                 .title("Alex Historical Title")
                 .tagline("Historical Tagline")
                 .bio("Historical Bio")
@@ -470,6 +476,11 @@ class SnapshotServiceTest {
         assertThat(portfolio.getSkills().get(0).getName()).isEqualTo("Python");
         assertThat(portfolio.getEducations()).hasSize(1);
         assertThat(portfolio.getEducations().get(0).getInstitution()).isEqualTo("High School");
+
+        // Verify User fullName and avatarUrl were restored and saved
+        assertThat(portfolio.getUser().getFullName()).isEqualTo("Alex Nguyen Historical");
+        assertThat(portfolio.getUser().getAvatarUrl()).isEqualTo("https://storage/avatar-v1.png");
+        verify(userRepository).save(portfolio.getUser());
 
         verify(portfolioRepository).save(portfolio);
     }

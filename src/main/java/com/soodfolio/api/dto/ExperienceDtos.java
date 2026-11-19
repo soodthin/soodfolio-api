@@ -2,6 +2,7 @@ package com.soodfolio.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
 import java.util.List;
@@ -21,7 +22,9 @@ public class ExperienceDtos {
         @NotBlank(message = "{validation.company.not_blank}")
         private String companyName;
 
+        @Pattern(regexp = "^$|^https?://.*", message = "{validation.url.invalid}")
         private String companyUrl;
+
         private String location;
         private String periodText;
         private String description;

@@ -15,7 +15,7 @@ public interface AuthService {
     AuthDtos.MessageResponse resetPassword(AuthDtos.ResetPasswordRequest request);
 
     // OAuth 2.0 Social Login & Sandbox
-    AuthDtos.AuthResponse processOAuthLogin(AuthDtos.OAuthLoginRequest request);
     AuthDtos.AuthResponse processOAuthSandbox(AuthDtos.OAuthSandboxRequest request);
+    AuthDtos.AuthResponse processOAuthLogin(AuthDtos.OAuthLoginRequest request);
     AuthDtos.AuthResponse exchangeOAuthCode(AuthDtos.OAuthExchangeRequest request);
 }

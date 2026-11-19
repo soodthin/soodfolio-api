@@ -1,21 +1,30 @@
 package com.soodfolio.api.service;
 
+import com.soodfolio.api.dto.AnalyticsDtos.RecordViewRequestDto;
+import com.soodfolio.api.dto.AnalyticsDtos.ViewCountResponseDto;
 import com.soodfolio.api.dto.PortfolioResponseDto;
 import com.soodfolio.api.dto.UpdatePortfolioRequestDto;
+import com.soodfolio.api.entity.AnalyticsView;
 import com.soodfolio.api.entity.Portfolio;
-import com.soodfolio.api.entity.SocialLink;
 import com.soodfolio.api.entity.User;
 import com.soodfolio.api.exception.ResourceNotFoundException;
 import com.soodfolio.api.repository.AnalyticsViewRepository;
 import com.soodfolio.api.repository.PortfolioRepository;
+import com.soodfolio.api.repository.UserRepository;
+import com.soodfolio.api.security.UserPrincipal;
 import com.soodfolio.api.service.impl.PortfolioServiceImpl;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,16 +45,20 @@ class PortfolioServiceTest {
     @Mock
     private AnalyticsViewRepository analyticsViewRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     @InjectMocks
     private PortfolioServiceImpl portfolioService;
 
     private UUID userId;
     private Portfolio portfolio;
+    private User user;
 
     @BeforeEach
     void setUp() {
         userId = UUID.randomUUID();
-        User user = User.builder()
+        user = User.builder()
                 .id(userId)
                 .fullName("Alex Nguyen")
                 .build();
@@ -58,8 +71,14 @@ class PortfolioServiceTest {
                 .tagline("Software Engineer")
                 .bio("Original bio")
                 .statusText("AVAILABLE")
+                .isPublished(true)
                 .socialLinks(new ArrayList<>())
                 .build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -126,26 +145,24 @@ class PortfolioServiceTest {
     @Test
     @DisplayName("Should successfully record view and return total view count")
     void shouldRecordViewSuccessfully() {
-        com.soodfolio.api.dto.AnalyticsDtos.RecordViewRequestDto request = 
-                com.soodfolio.api.dto.AnalyticsDtos.RecordViewRequestDto.builder()
-                        .slideId("01")
-                        .referrer("https://google.com")
-                        .build();
+        RecordViewRequestDto request = RecordViewRequestDto.builder()
+                .slideId("01")
+                .referrer("https://google.com")
+                .build();
 
         when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
         when(analyticsViewRepository.countByPortfolioId(portfolio.getId())).thenReturn(100L);
 
-        com.soodfolio.api.dto.AnalyticsDtos.ViewCountResponseDto response = 
+        ViewCountResponseDto response = 
                 portfolioService.recordView("alex", request, "Mozilla/5.0 (Windows NT 10.0)");
 
         assertThat(response).isNotNull();
         assertThat(response.getTotalViews()).isEqualTo(100L);
 
-        org.mockito.ArgumentCaptor<com.soodfolio.api.entity.AnalyticsView> captor = 
-                org.mockito.ArgumentCaptor.forClass(com.soodfolio.api.entity.AnalyticsView.class);
+        ArgumentCaptor<AnalyticsView> captor = ArgumentCaptor.forClass(AnalyticsView.class);
         verify(analyticsViewRepository).save(captor.capture());
 
-        com.soodfolio.api.entity.AnalyticsView captured = captor.getValue();
+        AnalyticsView captured = captor.getValue();
         assertThat(captured.getPortfolio()).isEqualTo(portfolio);
         assertThat(captured.getSlideId()).isEqualTo("01");
         assertThat(captured.getReferrer()).isEqualTo("https://google.com");
@@ -156,10 +173,9 @@ class PortfolioServiceTest {
     @Test
     @DisplayName("Should throw ResourceNotFoundException when recording view for non-existent username")
     void shouldThrowNotFoundWhenRecordingViewForUnknownUsername() {
-        com.soodfolio.api.dto.AnalyticsDtos.RecordViewRequestDto request = 
-                com.soodfolio.api.dto.AnalyticsDtos.RecordViewRequestDto.builder()
-                        .slideId("01")
-                        .build();
+        RecordViewRequestDto request = RecordViewRequestDto.builder()
+                .slideId("01")
+                .build();
 
         when(portfolioRepository.findByUsername("unknown")).thenReturn(Optional.empty());
 
@@ -168,6 +184,108 @@ class PortfolioServiceTest {
                 .hasMessageContaining("Portfolio not found with username: 'unknown'");
 
         verify(analyticsViewRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should throw ResourceNotFoundException when recording view on draft (unpublished) portfolio")
+    void shouldThrowNotFoundWhenRecordingViewOnDraftPortfolio() {
+        portfolio.setPublished(false);
+        RecordViewRequestDto request = RecordViewRequestDto.builder()
+                .slideId("01")
+                .build();
+
+        when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
+
+        assertThatThrownBy(() -> portfolioService.recordView("alex", request, "Mozilla/5.0"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Portfolio not found with username: 'alex'");
+
+        verify(analyticsViewRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("DRAFT visibility: Should return empty Optional when anonymous or non-owner accesses draft portfolio via getPortfolioByUsername")
+    void shouldReturnEmptyWhenAccessingDraftPortfolioByUsername() {
+        portfolio.setPublished(false);
+        when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
+
+        // 1. getPortfolioByUsername(username) returns Optional.empty()
+        Optional<PortfolioResponseDto> result = portfolioService.getPortfolioByUsername("alex");
+        assertThat(result).isEmpty();
+
+        // 2. getPortfolioByUsername(username, null) returns Optional.empty()
+        Optional<PortfolioResponseDto> nullViewerResult = portfolioService.getPortfolioByUsername("alex", null);
+        assertThat(nullViewerResult).isEmpty();
+
+        // 3. getPortfolioByUsername with non-owner returns Optional.empty()
+        UserPrincipal otherViewer = new UserPrincipal(
+                UUID.randomUUID(),
+                "intruder@soodfolio.dev",
+                "secret",
+                "Intruder",
+                AuthorityUtils.createAuthorityList("ROLE_USER")
+        );
+        Optional<PortfolioResponseDto> otherViewerResult = portfolioService.getPortfolioByUsername("alex", otherViewer);
+        assertThat(otherViewerResult).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PUBLISHED visibility: Should return DTO when accessing published portfolio via getPortfolioByUsername")
+    void shouldReturnDtoWhenAccessingPublishedPortfolioByUsername() {
+        portfolio.setPublished(true);
+        when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
+
+        Optional<PortfolioResponseDto> result = portfolioService.getPortfolioByUsername("alex");
+        assertThat(result).isPresent();
+        assertThat(result.get().getUsername()).isEqualTo("alex");
+        assertThat(result.get().isPublished()).isTrue();
+    }
+
+    @Test
+    @DisplayName("DRAFT visibility: Should return portfolio when owner accesses draft portfolio via getPortfolioByUsername with viewer or via getPortfolioByUserId")
+    void shouldReturnPortfolioWhenOwnerAccessesDraftPortfolio() {
+        portfolio.setPublished(false);
+        when(portfolioRepository.findByUsername("alex")).thenReturn(Optional.of(portfolio));
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+
+        UserPrincipal ownerViewer = new UserPrincipal(
+                userId,
+                "alex@soodfolio.dev",
+                "secret",
+                "Alex Nguyen",
+                AuthorityUtils.createAuthorityList("ROLE_USER")
+        );
+
+        // 1. Owner accesses via getPortfolioByUsername(username, ownerViewer)
+        Optional<PortfolioResponseDto> directResult = portfolioService.getPortfolioByUsername("alex", ownerViewer);
+        assertThat(directResult).isPresent();
+        assertThat(directResult.get().getUsername()).isEqualTo("alex");
+        assertThat(directResult.get().isPublished()).isFalse();
+
+        // 2. Owner accesses via getPortfolioByUserId(userId)
+        Optional<PortfolioResponseDto> userIdResult = portfolioService.getPortfolioByUserId(userId);
+        assertThat(userIdResult).isPresent();
+        assertThat(userIdResult.get().getUsername()).isEqualTo("alex");
+        assertThat(userIdResult.get().isPublished()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should successfully toggle published status between draft and published")
+    void shouldUpdatePublishedStatusSuccessfully() {
+        when(portfolioRepository.findByUserId(userId)).thenReturn(Optional.of(portfolio));
+        when(portfolioRepository.save(any(Portfolio.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Toggle to draft (false)
+        PortfolioResponseDto unpublishedDto = portfolioService.updatePublishedStatus(userId, false);
+        assertThat(unpublishedDto.isPublished()).isFalse();
+        assertThat(portfolio.isPublished()).isFalse();
+
+        // Toggle to published (true)
+        PortfolioResponseDto publishedDto = portfolioService.updatePublishedStatus(userId, true);
+        assertThat(publishedDto.isPublished()).isTrue();
+        assertThat(portfolio.isPublished()).isTrue();
+
+        verify(portfolioRepository, times(2)).save(portfolio);
     }
 
     @Test
@@ -245,4 +363,3 @@ class PortfolioServiceTest {
         assertThat(customResult.get().getThemeConfig()).isEqualTo(customTheme);
     }
 }
-

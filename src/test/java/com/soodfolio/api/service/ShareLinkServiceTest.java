@@ -108,6 +108,16 @@ class ShareLinkServiceTest {
                                 .title("Project Two")
                                 .build()
                 )))
+                .experiences(new ArrayList<>(List.of(
+                        PortfolioResponseDto.ExperienceDto.builder()
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000010"))
+                                .roleTitle("Role Ten")
+                                .build(),
+                        PortfolioResponseDto.ExperienceDto.builder()
+                                .id(UUID.fromString("00000000-0000-0000-0000-000000000020"))
+                                .roleTitle("Role Twenty")
+                                .build()
+                )))
                 .build();
     }
 
@@ -443,6 +453,39 @@ class ShareLinkServiceTest {
         assertThat(dto.getProjects().get(0).getId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001"));
     }
 
+    @Test
+    @DisplayName("Should filter allowed slides and experience list based on allowedSlideIds configuration")
+    void shouldFilterExperiencesCorrectlyBasedOnAllowedSlideIds() throws JsonProcessingException {
+        String rawToken = "st_live_FilterExpToken123";
+        String tokenHash = computeSha256(rawToken);
+
+        // Allow only "experience" section and specific experience "00000000-0000-0000-0000-000000000010"
+        ShareLink filteredLink = ShareLink.builder()
+                .id(UUID.randomUUID())
+                .snapshot(sampleSnapshot)
+                .tokenHash(tokenHash)
+                .allowedSlideIds(List.of("experience", "exp-00000000-0000-0000-0000-000000000010"))
+                .isRevoked(false)
+                .viewCount(0)
+                .build();
+
+        when(shareLinkRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(filteredLink));
+        when(objectMapper.readValue(sampleSnapshot.getSnapshotData(), PortfolioResponseDto.class))
+                .thenReturn(samplePortfolioDto);
+
+        PublicDeckResponse response = shareLinkService.getPublicDeck(rawToken);
+
+        assertThat(response).isNotNull();
+        PortfolioResponseDto dto = response.getPortfolio();
+
+        assertThat(dto.isShowExperience()).isTrue();
+        assertThat(dto.isShowProjects()).isFalse();
+
+        // Experience filtering: Role Twenty should be removed, leaving only Role Ten
+        assertThat(dto.getExperiences()).hasSize(1);
+        assertThat(dto.getExperiences().get(0).getId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000010"));
+    }
+
     // ==========================================
     // 4. recordTelemetry & Analytics Tests
     // ==========================================
@@ -570,6 +613,10 @@ class ShareLinkServiceTest {
 
         when(telemetryRepository.findByShareLinkId(linkId)).thenReturn(telemetryList);
 
+        LocalDateTime expectedLastViewed = LocalDateTime.of(2026, 11, 13, 10, 0);
+        when(telemetryRepository.findTopByShareLinkIdOrderByCreatedAtDesc(linkId))
+                .thenReturn(Optional.of(ShareLinkTelemetry.builder().createdAt(expectedLastViewed).build()));
+
         TelemetryAnalyticsResponse response = shareLinkService.getLinkAnalytics(userId, linkId);
 
         assertThat(response).isNotNull();
@@ -577,6 +624,7 @@ class ShareLinkServiceTest {
         assertThat(response.getCompanyName()).isEqualTo("Grab Singapore");
         assertThat(response.getTotalViews()).isEqualTo(15);
         assertThat(response.getTotalDwellSeconds()).isEqualTo(135L); // 20 + 40 + 60 + 15
+        assertThat(response.getLastViewedAt()).isEqualTo(expectedLastViewed);
 
         // Slide stats breakdown (sorted by totalDwellSeconds DESC)
         assertThat(response.getSlideStats()).hasSize(3);

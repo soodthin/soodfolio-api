@@ -10,8 +10,12 @@ import com.soodfolio.api.entity.SocialLink;
 import com.soodfolio.api.exception.ResourceNotFoundException;
 import com.soodfolio.api.repository.AnalyticsViewRepository;
 import com.soodfolio.api.repository.PortfolioRepository;
+import com.soodfolio.api.repository.UserRepository;
+import com.soodfolio.api.security.UserPrincipal;
 import com.soodfolio.api.service.PortfolioService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,19 +23,45 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-
 @Service
 @RequiredArgsConstructor
 public class PortfolioServiceImpl implements PortfolioService {
 
     private final PortfolioRepository portfolioRepository;
     private final AnalyticsViewRepository analyticsViewRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
     public Optional<PortfolioResponseDto> getPortfolioByUsername(String username) {
         return portfolioRepository.findByUsername(username)
+                .filter(Portfolio::isPublished)
                 .map(this::mapToDto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<PortfolioResponseDto> getPortfolioByUsername(String username, UserPrincipal viewer) {
+        Portfolio portfolio = portfolioRepository.findByUsername(username).orElse(null);
+        if (portfolio == null) {
+            return Optional.empty();
+        }
+
+        if (viewer == null) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof UserPrincipal p) {
+                viewer = p;
+            }
+        }
+
+        if (!portfolio.isPublished()) {
+            boolean isOwner = viewer != null && portfolio.getUser() != null && viewer.getId().equals(portfolio.getUser().getId());
+            if (!isOwner) {
+                return Optional.empty();
+            }
+        }
+
+        return Optional.of(mapToDto(portfolio));
     }
 
     @Override
@@ -56,6 +86,15 @@ public class PortfolioServiceImpl implements PortfolioService {
     public PortfolioResponseDto updatePortfolio(UUID userId, UpdatePortfolioRequestDto request) {
         Portfolio portfolio = portfolioRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio", "userId", userId));
+
+        if (request.getFullName() != null && !request.getFullName().isBlank() && portfolio.getUser() != null) {
+            portfolio.getUser().setFullName(request.getFullName().trim());
+            userRepository.save(portfolio.getUser());
+        }
+        if (request.getAvatarUrl() != null && portfolio.getUser() != null) {
+            portfolio.getUser().setAvatarUrl(request.getAvatarUrl().trim());
+            userRepository.save(portfolio.getUser());
+        }
 
         portfolio.setTitle(request.getTitle());
         portfolio.setTagline(request.getTagline());
@@ -96,6 +135,10 @@ public class PortfolioServiceImpl implements PortfolioService {
         Portfolio portfolio = portfolioRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Portfolio", "username", username));
 
+        if (!portfolio.isPublished()) {
+            throw new ResourceNotFoundException("Portfolio", "username", username);
+        }
+
         AnalyticsView view = AnalyticsView.builder()
                 .portfolio(portfolio)
                 .slideId(request != null ? request.getSlideId() : null)
@@ -113,7 +156,6 @@ public class PortfolioServiceImpl implements PortfolioService {
     }
 
     private PortfolioResponseDto mapToDto(Portfolio p) {
-
         long views = p.getId() != null ? analyticsViewRepository.countByPortfolioId(p.getId()) : 0;
         String fullName = p.getUser() != null ? p.getUser().getFullName() : null;
         String avatarUrl = p.getUser() != null ? p.getUser().getAvatarUrl() : null;

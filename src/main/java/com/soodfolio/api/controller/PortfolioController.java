@@ -68,7 +68,6 @@ public class PortfolioController {
     }
 
     @GetMapping("/{username}")
-
     @Operation(summary = "Get full portfolio by username", description = "Returns complete portfolio data for the public slide deck")
     public ResponseEntity<PortfolioResponseDto> getPortfolio(@PathVariable String username) {
         PortfolioResponseDto dto = portfolioService.getPortfolioByUsername(username)

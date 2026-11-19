@@ -1,8 +1,11 @@
 package com.soodfolio.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.Pattern;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.UUID;
@@ -39,9 +42,14 @@ public class PortfolioResponseDto {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class SocialLinkDto {
         private String platform;
+
+        @Pattern(regexp = "^$|^(https?://|mailto:|tel:).*", message = "{validation.url.invalid}")
         private String url;
+
         private String label;
     }
 

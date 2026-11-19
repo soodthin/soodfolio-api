@@ -1,6 +1,8 @@
 package com.soodfolio.api.controller;
 
 import com.soodfolio.api.dto.AuthDtos;
+import com.soodfolio.api.exception.BadRequestException;
+import com.soodfolio.api.security.AuthCookieHelper;
 import com.soodfolio.api.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -8,9 +10,14 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
@@ -19,34 +26,71 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService; // DIP: Injected via Interface
+    private final AuthCookieHelper cookieHelper;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new user", description = "Creates a user account and returns 201 Created with initial tokens")
     @ApiResponse(responseCode = "201", description = "User registered successfully")
     public ResponseEntity<AuthDtos.AuthResponse> register(@Valid @RequestBody AuthDtos.RegisterRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+        AuthDtos.AuthResponse response = authService.register(request);
+        ResponseCookie cookie = cookieHelper.createRefreshTokenCookie(response.getRefreshToken());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(response);
     }
 
     @PostMapping("/login")
     @Operation(summary = "User Login", description = "Authenticate with email OR username and password")
     @ApiResponse(responseCode = "200", description = "Login successful")
     public ResponseEntity<AuthDtos.AuthResponse> login(@Valid @RequestBody AuthDtos.LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+        AuthDtos.AuthResponse response = authService.login(request);
+        ResponseCookie cookie = cookieHelper.createRefreshTokenCookie(response.getRefreshToken());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(response);
     }
 
     @PostMapping("/refresh")
     @Operation(summary = "Refresh Access Token", description = "Submit a 7-day refresh token to obtain a fresh 30-minute access token")
     @ApiResponse(responseCode = "200", description = "Token refreshed successfully")
-    public ResponseEntity<AuthDtos.AuthResponse> refreshToken(@Valid @RequestBody AuthDtos.RefreshTokenRequest request) {
-        return ResponseEntity.ok(authService.refreshToken(request));
+    public ResponseEntity<AuthDtos.AuthResponse> refreshToken(
+            @CookieValue(name = AuthCookieHelper.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshTokenCookie,
+            @RequestBody(required = false) AuthDtos.RefreshTokenRequest request
+    ) {
+        String token = (refreshTokenCookie != null && !refreshTokenCookie.isBlank())
+                ? refreshTokenCookie
+                : (request != null ? request.getRefreshToken() : null);
+
+        if (token == null || token.isBlank()) {
+            throw new BadRequestException("Refresh token is required");
+        }
+
+        AuthDtos.AuthResponse response = authService.refreshToken(new AuthDtos.RefreshTokenRequest(token));
+        ResponseCookie cookie = cookieHelper.createRefreshTokenCookie(response.getRefreshToken());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(response);
     }
 
     @PostMapping("/logout")
     @Operation(summary = "Logout user", description = "Revokes the active refresh token and returns 204 No Content")
     @ApiResponse(responseCode = "204", description = "Logged out successfully")
-    public ResponseEntity<Void> logout(@Valid @RequestBody AuthDtos.RefreshTokenRequest request) {
-        authService.logout(request.getRefreshToken());
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<Void> logout(
+            @CookieValue(name = AuthCookieHelper.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshTokenCookie,
+            @RequestBody(required = false) AuthDtos.RefreshTokenRequest request
+    ) {
+        String token = (refreshTokenCookie != null && !refreshTokenCookie.isBlank())
+                ? refreshTokenCookie
+                : (request != null ? request.getRefreshToken() : null);
+
+        if (token != null && !token.isBlank()) {
+            authService.logout(token);
+        }
+
+        ResponseCookie clearCookie = cookieHelper.createClearRefreshTokenCookie();
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, clearCookie.toString())
+                .build();
     }
 
     @GetMapping("/me")
@@ -76,24 +120,34 @@ public class AuthController {
         return ResponseEntity.ok(authService.resetPassword(request));
     }
 
-    @PostMapping("/oauth/sandbox")
-    @Operation(summary = "OAuth Sandbox Mock Login", description = "Fast 1-click test login for GitHub and Google without cloud secrets")
-    @ApiResponse(responseCode = "200", description = "Sandbox authenticated successfully")
-    public ResponseEntity<AuthDtos.AuthResponse> oauthSandbox(@Valid @RequestBody AuthDtos.OAuthSandboxRequest request) {
-        return ResponseEntity.ok(authService.processOAuthSandbox(request));
-    }
-
-    @PostMapping("/oauth/callback")
-    @Operation(summary = "OAuth 2.0 Token Exchange", description = "Processes authorization code from GitHub or Google")
-    @ApiResponse(responseCode = "200", description = "OAuth authenticated successfully")
-    public ResponseEntity<AuthDtos.AuthResponse> oauthCallback(@Valid @RequestBody AuthDtos.OAuthLoginRequest request) {
-        return ResponseEntity.ok(authService.processOAuthLogin(request));
+    @GetMapping("/oauth/state")
+    @Operation(summary = "Generate CSRF state for OAuth flow", description = "Generates secure state token, sets HttpOnly cookie and returns state")
+    public ResponseEntity<Map<String, String>> generateOAuthState() {
+        String state = UUID.randomUUID().toString();
+        ResponseCookie stateCookie = cookieHelper.createOAuthStateCookie(state);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, stateCookie.toString())
+                .body(Map.of("state", state));
     }
 
     @PostMapping("/oauth/exchange")
     @Operation(summary = "Real OAuth 2.0 Code Exchange", description = "Exchanges authorization code with GitHub/Google for user profile and JWT")
     @ApiResponse(responseCode = "200", description = "OAuth authenticated successfully")
-    public ResponseEntity<AuthDtos.AuthResponse> oauthExchange(@Valid @RequestBody AuthDtos.OAuthExchangeRequest request) {
-        return ResponseEntity.ok(authService.exchangeOAuthCode(request));
+    public ResponseEntity<AuthDtos.AuthResponse> oauthExchange(
+            @Valid @RequestBody AuthDtos.OAuthExchangeRequest request,
+            @CookieValue(name = AuthCookieHelper.OAUTH_STATE_COOKIE_NAME, required = false) String cookieState
+    ) {
+        if (request.getState() == null || request.getState().isBlank() || cookieState == null || !request.getState().equals(cookieState)) {
+            throw new BadRequestException("CSRF State không hợp lệ hoặc đã hết hạn.");
+        }
+
+        AuthDtos.AuthResponse response = authService.exchangeOAuthCode(request);
+        ResponseCookie refreshCookie = cookieHelper.createRefreshTokenCookie(response.getRefreshToken());
+        ResponseCookie clearStateCookie = cookieHelper.createClearOAuthStateCookie();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, clearStateCookie.toString())
+                .body(response);
     }
 }

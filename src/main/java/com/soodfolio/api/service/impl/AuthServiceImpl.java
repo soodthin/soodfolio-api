@@ -6,12 +6,14 @@ import com.soodfolio.api.entity.Portfolio;
 import com.soodfolio.api.entity.RefreshToken;
 import com.soodfolio.api.entity.User;
 import com.soodfolio.api.exception.DuplicateResourceException;
+import com.soodfolio.api.exception.ForbiddenException;
 import com.soodfolio.api.exception.InvalidCredentialsException;
 import com.soodfolio.api.repository.PasswordResetTokenRepository;
 import com.soodfolio.api.repository.PortfolioRepository;
 import com.soodfolio.api.repository.RefreshTokenRepository;
 import com.soodfolio.api.repository.UserRepository;
 import com.soodfolio.api.security.JwtTokenProvider;
+import com.soodfolio.api.security.SecurityUtils;
 import com.soodfolio.api.security.UserPrincipal;
 import com.soodfolio.api.service.AuthService;
 import com.soodfolio.api.service.RefreshTokenService;
@@ -34,6 +36,7 @@ import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -55,6 +58,12 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
 
+    @Value("${app.oauth2.sandbox-enabled:false}")
+    private boolean sandboxEnabled;
+
+    @Value("${app.oauth2.allowed-redirect-uris:http://localhost:3000/auth/callback/github,http://localhost:3000/auth/callback/google,http://localhost:3001/auth/callback/github,http://localhost:3001/auth/callback/google}")
+    private String allowedRedirectUrisConfig;
+
     @Value("${app.oauth2.github.client-id:}")
     private String githubClientId;
 
@@ -67,14 +76,10 @@ public class AuthServiceImpl implements AuthService {
     @Value("${app.oauth2.google.client-secret:}")
     private String googleClientSecret;
 
-    private final RestClient restClient = RestClient.create();
+    @Value("${app.auth.log-reset-link:false}")
+    private boolean logResetLink;
 
-    private static final List<String> ALLOWED_REDIRECT_PREFIXES = List.of(
-            "http://localhost:3000/auth/callback/",
-            "http://localhost:3001/auth/callback/",
-            "https://soodfolio.io/auth/callback/",
-            "https://soodfolio.vercel.app/auth/callback/"
-    );
+    private final RestClient restClient = RestClient.create();
 
     // Concurrency guards to prevent duplicate external token exchange with GitHub / Google
     private final Map<String, CompletableFuture<AuthDtos.AuthResponse>> activeOAuthExchanges = new ConcurrentHashMap<>();
@@ -123,7 +128,7 @@ public class AuthServiceImpl implements AuthService {
 
         return AuthDtos.AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
+                .refreshToken(refreshToken.getRawToken() != null ? refreshToken.getRawToken() : refreshToken.getToken())
                 .tokenType("Bearer")
                 .expiresInMs(tokenProvider.getExpirationMs())
                 .user(buildUserDto(user, cleanUsername))
@@ -153,7 +158,7 @@ public class AuthServiceImpl implements AuthService {
 
             return AuthDtos.AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
+                .refreshToken(refreshToken.getRawToken() != null ? refreshToken.getRawToken() : refreshToken.getToken())
                 .tokenType("Bearer")
                 .expiresInMs(tokenProvider.getExpirationMs())
                 .user(buildUserDto(user, username))
@@ -169,8 +174,8 @@ public class AuthServiceImpl implements AuthService {
         RefreshToken oldRefreshToken = refreshTokenService.verifyExpiration(request.getRefreshToken());
         User user = oldRefreshToken.getUser();
 
-        // SEC-03 Remediation: Single-use Refresh Token Rotation
-        refreshTokenService.revokeToken(oldRefreshToken.getToken());
+        // SEC-03 Remediation: Single-use Refresh Token Rotation (pass raw token to prevent double-hashing)
+        refreshTokenService.revokeToken(request.getRefreshToken());
         RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
 
         UserPrincipal userPrincipal = UserPrincipal.create(user);
@@ -182,7 +187,7 @@ public class AuthServiceImpl implements AuthService {
 
         return AuthDtos.AuthResponse.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken.getToken())
+                .refreshToken(newRefreshToken.getRawToken() != null ? newRefreshToken.getRawToken() : newRefreshToken.getToken())
                 .tokenType("Bearer")
                 .expiresInMs(tokenProvider.getExpirationMs())
                 .user(buildUserDto(user, username))
@@ -223,22 +228,25 @@ public class AuthServiceImpl implements AuthService {
         if (user != null) {
             passwordResetTokenRepository.deleteByUser(user);
 
-            String token = UUID.randomUUID().toString().replace("-", "") + 
+            String rawToken = UUID.randomUUID().toString().replace("-", "") + 
                            UUID.randomUUID().toString().replace("-", "");
+            String hashedToken = SecurityUtils.sha256(rawToken);
 
             PasswordResetToken resetToken = PasswordResetToken.builder()
                     .user(user)
-                    .token(token)
+                    .token(hashedToken)
                     .expiryDate(Instant.now().plus(15, ChronoUnit.MINUTES))
                     .used(false)
                     .build();
 
             passwordResetTokenRepository.save(resetToken);
 
-            log.info("=======================================================================");
-            log.info("[SOODFOLIO] PASSWORD RESET REQUESTED FOR: {}", cleanEmail);
-            log.info("[SOODFOLIO] RESET LINK: http://localhost:3000/reset-password?token={}", token);
-            log.info("=======================================================================");
+            if (logResetLink) {
+                log.info("=======================================================================");
+                log.info("[SOODFOLIO] PASSWORD RESET REQUESTED FOR: {}", cleanEmail);
+                log.info("[SOODFOLIO] RESET LINK: http://localhost:3000/reset-password?token={}", rawToken);
+                log.info("=======================================================================");
+            }
         }
 
         return new AuthDtos.MessageResponse("Nếu email tồn tại trong hệ thống, link khôi phục mật khẩu đã được tạo thành công.");
@@ -251,7 +259,8 @@ public class AuthServiceImpl implements AuthService {
             return AuthDtos.VerifyResetTokenResponse.builder().valid(false).build();
         }
 
-        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token.trim()).orElse(null);
+        String hashedToken = SecurityUtils.sha256(token.trim());
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(hashedToken).orElse(null);
         if (resetToken == null || resetToken.isUsed() || resetToken.isExpired()) {
             return AuthDtos.VerifyResetTokenResponse.builder().valid(false).build();
         }
@@ -265,7 +274,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthDtos.MessageResponse resetPassword(AuthDtos.ResetPasswordRequest request) {
-        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(request.getToken().trim())
+        if (request.getToken() == null || request.getToken().isBlank()) {
+            throw new InvalidCredentialsException("Link khôi phục mật khẩu không hợp lệ hoặc không tồn tại.");
+        }
+
+        String hashedToken = SecurityUtils.sha256(request.getToken().trim());
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(hashedToken)
                 .orElseThrow(() -> new InvalidCredentialsException("Link khôi phục mật khẩu không hợp lệ hoặc không tồn tại."));
 
         if (resetToken.isUsed()) {
@@ -292,6 +306,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthDtos.AuthResponse processOAuthSandbox(AuthDtos.OAuthSandboxRequest request) {
+        if (!sandboxEnabled) {
+            throw new ForbiddenException("OAuth sandbox mode is disabled");
+        }
+
         String provider = request.getProvider().toUpperCase().trim();
         String defaultEmail = provider.equalsIgnoreCase("GITHUB") ? "developer@github.test" : "developer@google.test";
         String email = request.getEmail() != null && !request.getEmail().isBlank() 
@@ -318,8 +336,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthDtos.AuthResponse processOAuthLogin(AuthDtos.OAuthLoginRequest request) {
-        AuthDtos.OAuthSandboxRequest sandboxReq = new AuthDtos.OAuthSandboxRequest();
-        sandboxReq.setProvider(request.getProvider());
+        if (!sandboxEnabled) {
+            throw new ForbiddenException("OAuth sandbox mode is disabled");
+        }
+
+        String provider = request.getProvider().toUpperCase().trim();
+        AuthDtos.OAuthSandboxRequest sandboxReq = new AuthDtos.OAuthSandboxRequest(provider, null, null, null, null);
         return processOAuthSandbox(sandboxReq);
     }
 
@@ -369,15 +391,30 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    private List<String> getAllowedRedirectUris() {
+        if (allowedRedirectUrisConfig == null || allowedRedirectUrisConfig.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(allowedRedirectUrisConfig.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
     private AuthDtos.AuthResponse doExchangeOAuthCode(AuthDtos.OAuthExchangeRequest request) {
         String provider = request.getProvider().toUpperCase().trim();
         log.info("[SOODFOLIO] Exchanging OAuth authorization code for provider: {}", provider);
 
-        // SEC-05: Validate redirect_uri against whitelist
-        if (request.getRedirectUri() != null && !request.getRedirectUri().isBlank()) {
-            boolean isAllowed = ALLOWED_REDIRECT_PREFIXES.stream()
-                    .anyMatch(prefix -> request.getRedirectUri().startsWith(prefix));
-            if (!isAllowed) {
+        List<String> allowedUris = getAllowedRedirectUris();
+        String redirectUri = request.getRedirectUri();
+
+        // Exact-match validation against allowed redirect URIs whitelist
+        if ("GOOGLE".equals(provider)) {
+            if (redirectUri == null || redirectUri.isBlank() || !allowedUris.contains(redirectUri.trim())) {
+                throw new InvalidCredentialsException("redirect_uri không hợp lệ hoặc không nằm trong danh sách được phép");
+            }
+        } else {
+            if (redirectUri != null && !redirectUri.isBlank() && !allowedUris.contains(redirectUri.trim())) {
                 throw new InvalidCredentialsException("redirect_uri không nằm trong danh sách được phép");
             }
         }
@@ -390,10 +427,15 @@ public class AuthServiceImpl implements AuthService {
 
         try {
             if ("GITHUB".equals(provider)) {
+                if (githubClientId == null || githubClientId.isBlank() || githubClientSecret == null || githubClientSecret.isBlank()) {
+                    log.error("[SOODFOLIO] GitHub OAuth client credentials are not configured");
+                    throw new InvalidCredentialsException("GitHub OAuth client credentials are not configured");
+                }
+
                 // 1. Exchange code for access_token with GitHub
                 Map<String, String> tokenPayload = Map.of(
-                        "client_id", githubClientId,
-                        "client_secret", githubClientSecret,
+                        "client_id", githubClientId.trim(),
+                        "client_secret", githubClientSecret.trim(),
                         "code", request.getCode()
                 );
 
@@ -464,12 +506,17 @@ public class AuthServiceImpl implements AuthService {
                 }
 
             } else if ("GOOGLE".equals(provider)) {
+                if (googleClientId == null || googleClientId.isBlank() || googleClientSecret == null || googleClientSecret.isBlank()) {
+                    log.error("[SOODFOLIO] Google OAuth client credentials are not configured");
+                    throw new InvalidCredentialsException("Google OAuth client credentials are not configured");
+                }
+
                 // 1. Exchange code for access_token with Google
                 MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
                 form.add("code", request.getCode());
-                form.add("client_id", googleClientId);
-                form.add("client_secret", googleClientSecret);
-                form.add("redirect_uri", request.getRedirectUri() != null ? request.getRedirectUri() : "http://localhost:3000/auth/callback/google");
+                form.add("client_id", googleClientId.trim());
+                form.add("client_secret", googleClientSecret.trim());
+                form.add("redirect_uri", redirectUri.trim());
                 form.add("grant_type", "authorization_code");
 
                 Map<String, Object> tokenResponse = restClient.post()
@@ -495,6 +542,14 @@ public class AuthServiceImpl implements AuthService {
 
                 if (userProfile == null) {
                     throw new InvalidCredentialsException("Không thể lấy thông tin người dùng từ Google");
+                }
+
+                // Verify Google email_verified
+                Object emailVerifiedObj = userProfile.get("email_verified");
+                boolean isEmailVerified = Boolean.TRUE.equals(emailVerifiedObj) || "true".equalsIgnoreCase(String.valueOf(emailVerifiedObj));
+                if (!isEmailVerified) {
+                    log.warn("[SOODFOLIO] Google email is not verified for userinfo payload");
+                    throw new InvalidCredentialsException("Tài khoản Google chưa được xác thực email (email_verified is false)");
                 }
 
                 providerId = (String) userProfile.get("sub");
@@ -566,7 +621,7 @@ public class AuthServiceImpl implements AuthService {
 
         return AuthDtos.AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
+                .refreshToken(refreshToken.getRawToken() != null ? refreshToken.getRawToken() : refreshToken.getToken())
                 .tokenType("Bearer")
                 .expiresInMs(tokenProvider.getExpirationMs())
                 .user(buildUserDto(user, finalUsername))
